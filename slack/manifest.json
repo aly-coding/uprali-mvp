@@ -1,0 +1,38 @@
+{
+  "display_information": {
+    "name": "Uprali",
+    "description": "Build or buy, decided with proof.",
+    "long_description": "Ask /uprali a build or buy question. Uprali works out the 3-year cost of each side, shows where every number came from and who owns it, flags the numbers only a person can give, and records the decision's fingerprint on NEAR testnet so anyone can check it later. It runs on private AI (NEAR AI Cloud) when configured.",
+    "background_color": "#1d4ed8"
+  },
+  "features": {
+    "slash_commands": [
+      {
+        "command": "/uprali",
+        "url": "https://YOUR-APP.vercel.app/api/slack/commands",
+        "description": "Build or buy? Get a costed decision with sources",
+        "usage_hint": "Should we build our own CRM or keep paying $720 a year for HubSpot?",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://YOUR-APP.vercel.app/api/slack/oauth"
+    ],
+    "scopes": {
+      "bot": [
+        "commands"
+      ]
+    }
+  },
+  "settings": {
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://YOUR-APP.vercel.app/api/slack/interactions"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

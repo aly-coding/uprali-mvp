@@ -79,6 +79,26 @@ curl -s -X POST localhost:3000/api/v1/build-vs-buy \
 5. **Verify it (30 s).** Press **Verify this decision**: **Match**, recorded by your account at that time. Change one number in the snapshot and check again: **No match**.
 6. **Agents (40 s).** Switch to Claude Desktop with the Uprali MCP server and ask the same question in plain words. Claude calls `build_vs_buy` and gets the same memo, sources and fingerprint. "Same engine, for people and for agents, with every number traceable."
 
+## Uprali for Slack
+
+An extra on top of the hackathon build: people type `/uprali` and a build or buy question in any Slack channel.
+
+- Uprali answers in the channel with the 3-year cost of each side, why, the prototype trap, and how many numbers came from people versus the analyst's benchmarks.
+- The numbers only a person can give show as boxes in the message. Anyone types a number and presses Enter, and the decision updates, with that number owned by them.
+- **Approve** adds the person to the decision's approvers. **Record on NEAR** records the fingerprint through the relayer and adds a **Verify this decision** link.
+- Every request from Slack is checked against the app's signing secret and refused if it's older than 5 minutes. Replies go to the request's own Slack reply address (only `hooks.slack.com` is accepted), so the app only needs the `commands` permission and keeps no workspace tokens or messages. The decision's state lives in the message itself.
+- It stays off until `SLACK_SIGNING_SECRET` is set, so it can't affect the rest of the app.
+- `@Uprali` mentions aren't included: they need a stored token per workspace, so a database.
+
+**Setting it up (for Aly, about 10 minutes):**
+
+1. Open `/slack` on the live app and press **Copy the manifest**. It already has the live app's address in it. (`slack/manifest.json` in the repo is the same, with `YOUR-APP` to replace.)
+2. At api.slack.com/apps press **Create New App**, then **From a manifest**, pick your test workspace, choose **JSON**, paste, and press **Create**.
+3. On the app's **Basic Information** page copy **Client ID**, **Client Secret** and **Signing Secret** into Vercel as `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and `SLACK_SIGNING_SECRET`, then redeploy.
+4. Open `/slack` again and press **Add to Slack**, then **Allow**. **You should see** "Added to" your workspace's name.
+5. In any channel type `/uprali help`, then the example CRM question.
+6. To let other workspaces install it: in the Slack app, open **Manage Distribution**, tick the checklist and press **Activate Public Distribution**. Then anyone can use the **Add to Slack** button on `/slack`.
+
 ## How the decision is worked out
 
 Every dollar figure is computed in code (`src/lib/engine/buildVsBuy.ts`). Models only do two narrow jobs: read stated facts out of the question, and write the risk, CFO questions and 30-second summary.
@@ -159,12 +179,13 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 | `PUBLIC_BASE_URL` | Address used in verify links (Vercel's is picked up automatically) |
 | `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `NEAR_RPC_URL` | Ledger contract and the relayer agents record through (testnet only) |
 | `RECORD_ACCESS_CODE` | Lets the demo screen record through the relayer without a wallet when this code is typed |
+| `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | Uprali for Slack (see `/slack`) |
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 36 tests, including recording through the relayer with the access code and no wallet), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 43 tests, including recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
-**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, and the `/setup` page's wallet request and contract deploy. Run the demo script once on the live deploy before recording the video.
+**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's wallet request and contract deploy, and the Slack app against real Slack. Run the demo script once on the live deploy before recording the video.
 
 `npm audit` reports one high finding left in Meteor Wallet's SDK (`decode-uri-component` under `query-string` 7). The SDK only calls `stringify`, never the decoder the advisory is about, and the newer `query-string` breaks its import, so it stays until Meteor updates.
 
@@ -176,7 +197,9 @@ src/lib/attest.ts    NEAR AI Cloud attestation checks
 src/lib/ledger/      NEAR ledger client and the local demo ledger
 src/lib/service.ts   shared by the API, MCP server and demo screen
 src/app/mcp/         MCP server
-src/app/api/         HTTP API
+src/app/api/         HTTP API, and Slack under api/slack
+src/lib/slack/       Uprali for Slack: signatures, messages, install
+slack/manifest.json  Slack app manifest
 src/components/      demo screen, wallet sign-in (Intear, Meteor), memo, verify page, /setup page
 src/lib/setup.ts     helpers for the no-terminal ledger setup
 public/              the built contract, served for /setup
