@@ -1,6 +1,5 @@
 import { authRequired } from "@/lib/auth";
 import { nearAiConfig, providerOrder } from "@/lib/engine/providers";
-import { googleEnabled } from "@/lib/google";
 import { getLedger } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +21,5 @@ export async function GET() {
     deploy: process.env.VERCEL_ENV ?? null,
     // The throwaway local ledger is for running the app on your own computer (the README demo), never the live site.
     localDemo: ledger.network === "local-demo" && !process.env.VERCEL,
-    googleSignIn: googleEnabled(),
   });
 }

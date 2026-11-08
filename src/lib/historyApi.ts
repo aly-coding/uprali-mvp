@@ -3,8 +3,7 @@
  * requests. Every call is scoped to the caller's owner.
  */
 import { getHistory, type HistoryEntry, type HistoryStore, type HistorySummary } from "./history";
-import { OAUTH_COOKIE, finishGoogle, googleEnabled } from "./google";
-import { accountOwner, cookieHeader, googleOwner, makeNonce, makeSession, nearVerifier, SESSION_COOKIE, SESSION_DAYS, SIGN_IN_MESSAGE, SignInError, signInRecipient, verifySignIn, webOwner, withCookie, type VerifyNep413 } from "./identity";
+import { accountOwner, cookieHeader, makeNonce, makeSession, nearVerifier, SESSION_COOKIE, SESSION_DAYS, SIGN_IN_MESSAGE, SignInError, signInRecipient, verifySignIn, webOwner, withCookie, type VerifyNep413 } from "./identity";
 import { getLedger } from "./ledger";
 import { allow, clientKey } from "./ratelimit";
 import { publicBaseUrl } from "./service";
@@ -36,8 +35,6 @@ export async function sessionInfo(req: Request, env: Env = process.env): Promise
   return withCookie(
     Response.json({
       account: who.account,
-      google: who.google ? { email: who.google.email } : null,
-      googleSignIn: googleEnabled(env),
       storage: store.kind,
       storageNote: storageNote(store),
       privacyNote: PRIVACY_NOTE,
@@ -64,47 +61,12 @@ export async function signIn(req: Request, env: Env = process.env, verifier?: Ve
   }
   let moved = 0;
   try {
-    const store = await getHistory(env);
-    if (who.google) {
-      // Already signed in with Google: the wallet's earlier runs join the Google history.
-      moved = await store.moveOwner(accountOwner(account), googleOwner(who.google.sub));
-    } else {
-      moved = await store.moveOwner(who.owner, accountOwner(account));
-    }
+    moved = await (await getHistory(env)).moveOwner(who.owner, accountOwner(account));
   } catch {
-    /* the runs stay where they were */
+    /* the runs stay with the browser */
   }
-  const res = Response.json({ account, moved, google: who.google ? { email: who.google.email } : null });
-  res.headers.append("set-cookie", cookieHeader(SESSION_COOKIE, makeSession(account, env, Date.now(), who.google), SESSION_DAYS * 86_400));
-  return withCookie(res, who.setCookie);
-}
-
-/** Finishes a Google sign-in: this browser's runs, and a signed-in wallet's, join the Google history. */
-export async function googleSignedIn(req: Request, env: Env = process.env, fetcher: typeof fetch = fetch): Promise<Response> {
-  const who = webOwner(req, env);
-  const back = (path: string) => {
-    const res = new Response(null, { status: 302, headers: { location: new URL(path, new URL(req.url).origin).toString() } });
-    res.headers.append("set-cookie", cookieHeader(OAUTH_COOKIE, "", 0));
-    return res;
-  };
-  let user: { sub: string; email: string };
-  let returnTo: string;
-  try {
-    ({ user, returnTo } = await finishGoogle(req, env, fetcher));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Google sign-in didn't work.";
-    return withCookie(back(`/history?signin_error=${encodeURIComponent(msg.slice(0, 200))}`), who.setCookie);
-  }
-  const to = googleOwner(user.sub);
-  try {
-    const store = await getHistory(env);
-    await store.moveOwner(`browser:${who.browserId}`, to);
-    if (who.account) await store.moveOwner(accountOwner(who.account), to);
-  } catch {
-    /* the runs stay where they were */
-  }
-  const res = back(returnTo);
-  res.headers.append("set-cookie", cookieHeader(SESSION_COOKIE, makeSession(who.account, env, Date.now(), user), SESSION_DAYS * 86_400));
+  const res = Response.json({ account, moved });
+  res.headers.append("set-cookie", cookieHeader(SESSION_COOKIE, makeSession(account, env), SESSION_DAYS * 86_400));
   return withCookie(res, who.setCookie);
 }
 
@@ -126,7 +88,7 @@ export async function webList(req: Request, env: Env = process.env): Promise<Res
   const who = webOwner(req, env);
   try {
     const out = await listFor(who.owner, new URL(req.url), env);
-    return withCookie(Response.json({ account: who.account, google: who.google ? { email: who.google.email } : null, googleSignIn: googleEnabled(env), ...out }), who.setCookie);
+    return withCookie(Response.json({ account: who.account, ...out }), who.setCookie);
   } catch {
     return Response.json({ error: "Couldn't read the history. Check the database connection." }, { status: 503 });
   }

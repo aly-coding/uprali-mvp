@@ -21,7 +21,6 @@ interface Config {
   wallet: { networkId: "testnet"; contractId: string } | null;
   relayerCodeEnabled: boolean;
   localDemo?: boolean;
-  googleSignIn?: boolean;
 }
 
 /** A result waiting to be recorded while the person connects a wallet (some wallets reload the page). */
@@ -38,6 +37,32 @@ function savePending(p: Omit<Pending, "at">) {
     sessionStorage.setItem(PENDING, JSON.stringify({ ...p, at: Date.now() }));
   } catch {
     /* storage off: the result stays on screen when the wallet opens in a popup */
+  }
+}
+/** What to do once the wallet is connected: open a template, or run the question on screen. */
+const AFTER_SIGN_IN = "uprali:after-sign-in";
+interface AfterSignIn {
+  at: number;
+  template: TemplateId;
+  run: boolean;
+  question?: string;
+  values?: Record<string, string>;
+}
+function saveAfterSignIn(a: Omit<AfterSignIn, "at">) {
+  try {
+    sessionStorage.setItem(AFTER_SIGN_IN, JSON.stringify({ ...a, at: Date.now() }));
+  } catch {
+    /* storage off: the page keeps its state when the wallet opens in a popup */
+  }
+}
+function takeAfterSignIn(): AfterSignIn | null {
+  try {
+    const raw = sessionStorage.getItem(AFTER_SIGN_IN);
+    sessionStorage.removeItem(AFTER_SIGN_IN);
+    const a = raw ? (JSON.parse(raw) as AfterSignIn) : null;
+    return a && Date.now() - a.at < 30 * 60_000 ? a : null;
+  } catch {
+    return null;
   }
 }
 function takePending(): Pending | null {
@@ -102,7 +127,6 @@ export function DecideApp() {
   const [recorded, setRecorded] = useState<Recorded | null>(null);
   const [code, setCode] = useState("");
   const [historyAccount, setHistoryAccount] = useState<string | null>(null);
-  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [parent, setParent] = useState<{ id: string; version: number; title: string } | null>(null);
   /** Fields filled from an advisor suggestion, not typed by the person. Typing over one makes it theirs. */
   const [suggested, setSuggested] = useState<Record<string, true>>({});
@@ -111,10 +135,7 @@ export function DecideApp() {
   useEffect(() => {
     fetch("/api/app/session")
       .then((r) => r.json())
-      .then((s: { account: string | null; google?: { email: string } | null }) => {
-        setHistoryAccount(s.account);
-        setGoogleEmail(s.google?.email ?? null);
-      })
+      .then((s: { account: string | null }) => setHistoryAccount(s.account))
       .catch(() => undefined);
     // "Re-run with new numbers" from the History page: load that run's question and numbers.
     const from = new URLSearchParams(window.location.search).get("from");
@@ -170,6 +191,31 @@ export function DecideApp() {
     setResult(p.result);
   }, [account, result]);
 
+  // Wallet first: picking a decision or pressing Run asks for the wallet, then carries on.
+  const [runAfterSignIn, setRunAfterSignIn] = useState(false);
+  useEffect(() => {
+    if (!account) return;
+    const a = takeAfterSignIn();
+    if (!a) return;
+    if (a.template !== template) pick(a.template);
+    if (a.question !== undefined) setQuestion(a.question);
+    if (a.values) setValues(a.values);
+    if (a.run) setRunAfterSignIn(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
+  useEffect(() => {
+    if (!account || !runAfterSignIn) return;
+    setRunAfterSignIn(false);
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, runAfterSignIn]);
+
+  function startWithWallet(t: TemplateId) {
+    if (!wallet) return;
+    saveAfterSignIn({ template: t, run: false });
+    wallet.modal.show();
+  }
+
   function connectToSave() {
     if (!result || !wallet) return;
     savePending({ template, question, asked, result });
@@ -177,6 +223,7 @@ export function DecideApp() {
   }
 
   const who = account ?? (demo ? "demo-user" : null);
+  const needsWallet = Boolean(config?.wallet && !account);
   const groups = useMemo(() => {
     const order: FieldGroup[] = ["buy", "build", "value", "general"];
     return order
@@ -224,6 +271,13 @@ export function DecideApp() {
   }
 
   async function run() {
+    if (config?.wallet && !account) {
+      // Sign in first, so the result can be saved on NEAR. The run starts as soon as the wallet connects.
+      if (!wallet) return setError("NEAR wallet sign-in is still loading. Try again in a moment.");
+      saveAfterSignIn({ template, run: true, question, values });
+      wallet.modal.show();
+      return;
+    }
     setBusy("deciding");
     setError("");
     setResult(null);
@@ -338,22 +392,23 @@ export function DecideApp() {
             Every spend decision gets a memo where each number shows its source and owner, a human sign-off, and a proof on NEAR. The analysis runs
             privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product, expand into a new market, or invest in AI.
           </p>
-          <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
           {config.wallet ? (
-            <button className="btn primary big" onClick={() => wallet?.modal.show()} disabled={!wallet}>
-              Sign in with NEAR wallet
-            </button>
+            <>
+              <p className="small"><strong>Pick a decision to start.</strong> Uprali asks you to connect your NEAR testnet wallet first, so every result can be signed and saved on NEAR under your account.</p>
+              <TemplatePicker value={null} onPick={startWithWallet} />
+              <div className="judges small">
+                <strong>Judging?</strong> Pick any decision and connect a NEAR testnet wallet (Intear or Meteor). Run it, press <strong>Sign and record</strong>, then open
+                History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
+                <TestnetHelp />
+              </div>
+            </>
           ) : (
-            <p className="muted small">NEAR wallet sign-in turns on once the ledger is on testnet. Owner? <a href="/setup">Set it up</a>.</p>
+            <>
+              <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
+              <p className="muted small">NEAR wallet sign-in turns on once the ledger is on testnet. Owner? <a href="/setup">Set it up</a>.</p>
+              <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
+            </>
           )}
-          {config.wallet && (
-            <div className="judges small">
-              <strong>Judging?</strong> Sign in with a NEAR testnet wallet, run any decision, press <strong>Sign and record</strong>, then open
-              History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
-              <TestnetHelp />
-            </div>
-          )}
-          <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
           {error && <p className="error">{error}</p>}
         </section>
       </main>
@@ -435,7 +490,7 @@ export function DecideApp() {
         <span className="chip" title="Change it in Templates">{templateTitle(template)}</span>
         <span className="grow" />
         <button className="btn primary" onClick={run} disabled={!canRun}>
-          {busy === "deciding" ? "Working it out…" : result ? "Run again" : isCase ? "Build the case" : "Run the decision"}
+          {busy === "deciding" ? "Working it out…" : needsWallet ? "Connect NEAR wallet and run" : result ? "Run again" : isCase ? "Build the case" : "Run the decision"}
         </button>
       </div>
     </div>
@@ -490,7 +545,7 @@ export function DecideApp() {
         {more ? "Fewer numbers" : isCase ? "All assumptions (churn, costs, discount rate…)" : "More numbers (upkeep, security, on-call, turnover…)"}
       </button>
       <button className="btn primary" onClick={run} disabled={!canRun}>
-        {busy === "deciding" ? "Working it out…" : result ? "Run again with these numbers" : "Run with these numbers"}
+        {busy === "deciding" ? "Working it out…" : needsWallet ? "Connect NEAR wallet and run" : result ? "Run again with these numbers" : "Run with these numbers"}
       </button>
     </div>
   );
@@ -602,18 +657,6 @@ export function DecideApp() {
                             </p>
                             <div className="row"><button className="btn" onClick={download}>Download snapshot</button></div>
                           </div>
-                        )}
-                        {config.googleSignIn && (
-                          googleEmail ? (
-                            <p className="muted small">Kept in your <a href="/history">History</a> as {googleEmail}.</p>
-                          ) : (
-                            <div className="keep-history small">
-                              <p>
-                                <strong>Want to come back to your scenarios later?</strong> Sign in with Google to keep them in your History on any device. Recording on NEAR still uses your wallet.
-                              </p>
-                              <a className="btn" href={`/api/auth/google?return=${encodeURIComponent(result.runId ? `/history?id=${result.runId}` : "/history")}`}>Sign in with Google</a>
-                            </div>
-                          )
                         )}
                       </div>
                     </>

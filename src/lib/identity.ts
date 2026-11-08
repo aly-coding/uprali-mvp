@@ -51,43 +51,23 @@ export function cookieHeader(name: string, value: string, maxAgeSec: number): st
 
 // ---------- session ----------
 
-/** A signed-in browser: a NEAR account (checked by its signature), a Google account (checked by Google), or both. */
-export interface SessionInfo {
-  account: string | null;
-  google: { sub: string; email: string } | null;
-}
-
-export function makeSession(account: string | null, env: Env = process.env, now = Date.now(), google: SessionInfo["google"] = null): string {
-  const body: Record<string, unknown> = { e: now + SESSION_DAYS * 86_400_000 };
-  if (account) body.a = account;
-  if (google) {
-    body.g = google.sub;
-    body.m = google.email;
-  }
-  const payload = b64u(Buffer.from(JSON.stringify(body)));
+export function makeSession(account: string, env: Env = process.env, now = Date.now()): string {
+  const payload = b64u(Buffer.from(JSON.stringify({ a: account, e: now + SESSION_DAYS * 86_400_000 })));
   return `v1.${payload}.${b64u(mac(sessionSecret(env), `v1.${payload}`))}`;
 }
 
-export function readSessionInfo(token: string | null, env: Env = process.env, now = Date.now()): SessionInfo | null {
+export function readSession(token: string | null, env: Env = process.env, now = Date.now()): string | null {
   if (!token) return null;
   const [v, payload, sig] = token.split(".");
   if (v !== "v1" || !payload || !sig) return null;
   if (!same(Buffer.from(sig, "base64url"), mac(sessionSecret(env), `v1.${payload}`))) return null;
   try {
-    const { a, e, g, m } = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { a?: unknown; e?: unknown; g?: unknown; m?: unknown };
-    if (typeof e !== "number" || e < now) return null;
-    const account = typeof a === "string" && validAccountId(a) ? a : null;
-    const google = typeof g === "string" && /^[A-Za-z0-9_-]{1,255}$/.test(g) ? { sub: g, email: typeof m === "string" ? m.slice(0, 254) : "" } : null;
-    if (!account && !google) return null;
-    return { account, google };
+    const { a, e } = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { a?: unknown; e?: unknown };
+    if (typeof a !== "string" || !validAccountId(a) || typeof e !== "number" || e < now) return null;
+    return a;
   } catch {
     return null;
   }
-}
-
-/** The NEAR account a session holds, if any. */
-export function readSession(token: string | null, env: Env = process.env, now = Date.now()): string | null {
-  return readSessionInfo(token, env, now)?.account ?? null;
 }
 
 export function validAccountId(a: string): boolean {
@@ -164,29 +144,24 @@ export async function verifySignIn(body: unknown, recipient: string, verify: Ver
 export interface WebOwner {
   owner: string;
   account: string | null;
-  google: SessionInfo["google"];
   browserId: string;
   /** Set-Cookie to send when the browser had no id yet. */
   setCookie: string | null;
 }
 
 export function webOwner(req: Request, env: Env = process.env): WebOwner {
-  const session = readSessionInfo(readCookie(req, SESSION_COOKIE), env);
-  const account = session?.account ?? null;
-  const google = session?.google ?? null;
+  const account = readSession(readCookie(req, SESSION_COOKIE), env);
   let browserId = readCookie(req, BROWSER_COOKIE);
   let setCookie: string | null = null;
   if (!browserId || !/^[a-f0-9]{32}$/.test(browserId)) {
     browserId = randomBytes(16).toString("hex");
     setCookie = cookieHeader(BROWSER_COOKIE, browserId, 400 * 86_400);
   }
-  // A Google account, once used, holds the history: runs from a wallet signed in alongside it move there.
-  return { owner: google ? googleOwner(google.sub) : account ? accountOwner(account) : browserOwner(browserId), account, google, browserId, setCookie };
+  return { owner: account ? accountOwner(account) : browserOwner(browserId), account, browserId, setCookie };
 }
 
 export const accountOwner = (account: string) => `near:${account}`;
 export const browserOwner = (id: string) => `browser:${id}`;
-export const googleOwner = (sub: string) => `google:${sub}`;
 export const slackOwner = (team: string, user: string) => `slack:${team}:${user}`;
 
 /** API and MCP runs are kept per API key, so only with keys set. With an open API there's no owner to keep them for. */

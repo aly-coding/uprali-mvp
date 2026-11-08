@@ -40,8 +40,8 @@ The models only read the numbers stated in the question and write the prose. Cod
 
 The live app uses **NEAR wallet sign-in**, so each decision you make is saved to your history and recorded on NEAR under your own account.
 
-1. Open the live app and press **Sign in with NEAR wallet**. Pick Intear or Meteor.
-2. Pick **Build vs buy**, keep the example question and press **Run the decision**. **You should see** the memo, where every number shows its source and owner.
+1. Open the live app and pick **Buy vs Build**. Uprali asks you to connect a NEAR testnet wallet first: pick Intear or Meteor.
+2. Keep the example question and press **Run the decision**. **You should see** the memo, where every number shows its source and owner.
    Ran a decision before signing in? Press **Connect NEAR wallet to save** under the result: you come straight back to it, then press **Sign and record**. The live site never saves to a throwaway ledger.
 3. Press **Sign and record as** your account and approve in the wallet. **You should see** "Recorded on NEAR testnet" and **See the transaction on the NEAR explorer**.
 4. Press **See it in History**, open the decision and press **Verify**. **You should see** **Match**. Press **Try to cheat: make building $50,000 cheaper** and it turns into **No match**.
@@ -165,7 +165,6 @@ People ask **@uprali-mvp** in a channel, message it directly, or type `/uprali`,
 Every decision is saved with its memo, the numbers it was given, its snapshot, fingerprint and whether it was recorded. Open **History** in the app to see them.
 
 - **Whose history.** A NEAR account counts once it confirms it's you: a free signed message (NEP-413) from a full-access key, checked on NEAR, with nothing sent on chain. Until then runs belong to this browser and move to the account when it confirms. Slack runs belong to the Slack user (`/uprali history` shows your last 10, only to you). API and MCP runs belong to the API key.
-- **Sign in with Google (optional).** Keeps your scenarios so you can come back on any device. It never records on NEAR; the wallet does that. When you use both, the wallet's runs join the Google history. It's hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (step 7 in the setup below).
 - **Re-run.** Open a decision and press **Re-run with new numbers**. The new run keeps the decision id and takes the next version, linked to the one before. The older version stays as it was.
 - **Where it's kept.** In Postgres when `POSTGRES_URL` or `DATABASE_URL` is set (Vercel's Neon or Supabase integration sets one). The table `uprali_decisions` is made on first use. With no database it's kept in the server's memory, which resets on restart, and the page says so.
 - **What's kept.** Decision memos only, never chat transcripts. You can delete any decision from your history; its fingerprint stays on the ledger.
@@ -251,8 +250,7 @@ You don't need to touch code. Each step is a few clicks; the terminal steps can 
 
    For engineers: `npm run contract:deploy` does the same from a terminal with your own testnet key.
 6. **Database for the history (3 minutes).** In the Vercel project, open the **Storage** tab, press **Create Database** (or **Browse Marketplace**), pick **Neon** (or **Supabase**) on the free plan, and connect it to this project for **Production** and **Preview**. Vercel adds the database address as an environment variable by itself. Then **Redeploy**. **You should see** on the **History** page: "Saved in this app's database." Nothing else to set: the app makes its own table.
-7. **Google sign-in for History (optional, 5 minutes).** In [Google Cloud Console](https://console.cloud.google.com), make or pick a project. Open **APIs & Services → OAuth consent screen**, choose **External**, fill in the app name and your email, and save. Open **Credentials → Create credentials → OAuth client ID**, choose **Web application**, and under **Authorized redirect URIs** add `https://www.financeanalyst.app/api/auth/google/callback` (add the `vercel.app` address too if people use it). Press **Create**, then copy the **Client ID** and **Client secret** into Vercel as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (Production and Preview ticked), and redeploy. **You should see** **Sign in with Google** under a result and on History.
-8. **Submit.** Post the demo video on X, then submit the repo, the live link and the post in the hackathon form before **Nov 14, 2026 at 23:59 UTC (3:59 PM Pacific)**.
+7. **Submit.** Post the demo video on X, then submit the repo, the live link and the post in the hackathon form before **Nov 14, 2026 at 23:59 UTC (3:59 PM Pacific)**.
 
 ## Environment variables
 
@@ -269,14 +267,13 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 | `RECORD_ACCESS_CODE` | Lets the demo screen record through the relayer without a wallet when this code is typed |
 | `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | Uprali for Slack (see `/slack`) |
 | `SLACK_BOT_TOKEN`, `SLACK_TOKEN_KEY` | The bot token (`xoxb-…`) that lets @uprali-mvp answer mentions and direct messages, if it wasn't installed through **Add to Slack**; and an optional key for encrypting stored bot tokens |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google sign-in to keep History across visits. Redirect URI: `<site>/api/auth/google/callback` |
 | `NEXT_PUBLIC_UPRALI_VOICE` | `on` brings back the mic and read-aloud buttons (off by default) |
 | `POSTGRES_URL` or `DATABASE_URL` | Postgres for decision history (set by Vercel's Neon or Supabase integration). Without it, history is kept in memory |
 | `SESSION_SECRET` | Optional: signs the history sign-in cookie. Without it, a key is derived from the database address |
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 113 tests, including all four business-case templates, their scenarios, payback and NPV, the AI cash and capacity split, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, the health page, Google sign-in for History with Google faked, and the Slack app's signature checks, command, mentions, direct messages, template picking, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 107 tests, including all four business-case templates, their scenarios, payback and NPV, the AI cash and capacity split, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, the health page, and the Slack app's signature checks, command, mentions, direct messages, template picking, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
 **Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's faucet request and contract deploy, a wallet's sign-in message for history, the Slack app against real Slack, and the new workspace look in a real browser. Run the demo script once on the live deploy before recording the video.
 
