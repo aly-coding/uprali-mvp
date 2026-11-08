@@ -1,5 +1,6 @@
 import { authRequired } from "@/lib/auth";
 import { nearAiConfig, providerOrder } from "@/lib/engine/providers";
+import { googleEnabled } from "@/lib/google";
 import { getLedger } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -19,5 +20,8 @@ export async function GET() {
     // Setting names only (never values), so /setup can say what this deploy is missing.
     ledgerMissing: ["NEAR_NETWORK", "NEAR_CONTRACT_ID", "NEAR_ACCOUNT_ID", "NEAR_PRIVATE_KEY", "RECORD_ACCESS_CODE", "UPRALI_API_KEYS"].filter((n) => !process.env[n]?.trim()),
     deploy: process.env.VERCEL_ENV ?? null,
+    // The throwaway local ledger is for running the app on your own computer (the README demo), never the live site.
+    localDemo: ledger.network === "local-demo" && !process.env.VERCEL,
+    googleSignIn: googleEnabled(),
   });
 }

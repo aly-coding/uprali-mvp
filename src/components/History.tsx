@@ -33,6 +33,8 @@ interface Entry extends Summary {
 
 interface ListResponse {
   account: string | null;
+  google?: { email: string } | null;
+  googleSignIn?: boolean;
   storage: "postgres" | "memory";
   storageNote: string;
   privacyNote: string;
@@ -80,6 +82,8 @@ export function History() {
   useEffect(() => {
     load();
     setOpenId(idFromUrl());
+    const signInError = new URLSearchParams(window.location.search).get("signin_error");
+    if (signInError) setError(signInError.slice(0, 200));
     const onPop = () => setOpenId(idFromUrl());
     window.addEventListener("popstate", onPop);
     let unsub: (() => void) | null = null;
@@ -177,13 +181,28 @@ export function History() {
   }
 
   const account = list?.account ?? null;
+  const googleEmail = list?.google?.email ?? null;
   const unconfirmed = walletAccount && walletAccount !== account;
+  const here = typeof window !== "undefined" ? window.location.pathname + window.location.search.replace(/[?&]signin_error=[^&]*/, "") : "/history";
+  const googleButton = list?.googleSignIn && !googleEmail && (
+    <a className="btn small" href={`/api/auth/google?return=${encodeURIComponent(here || "/history")}`} title="Keeps your scenarios so you can come back to them on any device. Recording on NEAR still uses your wallet.">
+      Sign in with Google
+    </a>
+  );
 
   const whoBar = (
     <div className="who">
-      {account ? (
+      {googleEmail ? (
+        <>
+          History for <strong>{googleEmail}</strong>
+          {account && <span className="muted"> and wallet {account}</span>}
+          {!account && walletCfg && <button className="btn small" onClick={() => wallet?.modal.show()} disabled={!wallet}>Sign in with NEAR wallet</button>}
+          <button className="btn small" onClick={leave}>Sign out</button>
+        </>
+      ) : account ? (
         <>
           History for <strong>{account}</strong>
+          {googleButton}
           <button className="btn small" onClick={leave}>Sign out</button>
         </>
       ) : unconfirmed ? (
@@ -197,6 +216,7 @@ export function History() {
           {walletCfg && (
             <button className="btn small" onClick={() => wallet?.modal.show()} disabled={!wallet}>Sign in with NEAR wallet</button>
           )}
+          {googleButton}
         </>
       )}
     </div>

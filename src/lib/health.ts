@@ -121,7 +121,7 @@ export async function health(env: Env = process.env) {
     nearAi: { ...nearAi, providerOrder: order },
     database: { kind: store.kind, answers: db.ok, ms: db.ms },
     other: {
-      settings: set(env, ["ANTHROPIC_API_KEY", "PUBLIC_BASE_URL", "UPRALI_API_KEYS", "RECORD_ACCESS_CODE", "SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN", "SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "NEXT_PUBLIC_UPRALI_VOICE"]),
+      settings: set(env, ["ANTHROPIC_API_KEY", "PUBLIC_BASE_URL", "UPRALI_API_KEYS", "RECORD_ACCESS_CODE", "SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN", "SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "NEXT_PUBLIC_UPRALI_VOICE", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]),
       commit: env.VERCEL_GIT_COMMIT_SHA ? env.VERCEL_GIT_COMMIT_SHA.slice(0, 7) : null,
     },
   };

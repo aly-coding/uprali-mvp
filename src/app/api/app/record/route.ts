@@ -17,6 +17,9 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { snapshot?: unknown } | null;
   if (!body || !validateSnapshot(body.snapshot)) return Response.json({ error: "That isn't a valid Uprali decision snapshot." }, { status: 400 });
   const ledger = await getLedger();
+  if (ledger.network === "local-demo" && process.env.VERCEL) {
+    return Response.json({ error: "Saving on NEAR isn't switched on for this site yet. The owner sets it up once on the /setup page." }, { status: 409 });
+  }
   const code = process.env.RECORD_ACCESS_CODE;
   if (ledger.network === "near-testnet" && !(code && req.headers.get("x-access-code") === code)) {
     return Response.json({ error: "Sign in with your NEAR wallet to record this decision." }, { status: 403 });

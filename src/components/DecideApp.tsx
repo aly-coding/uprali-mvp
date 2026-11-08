@@ -20,6 +20,35 @@ interface Config {
   ledger: { network: string; contractId: string | null };
   wallet: { networkId: "testnet"; contractId: string } | null;
   relayerCodeEnabled: boolean;
+  localDemo?: boolean;
+  googleSignIn?: boolean;
+}
+
+/** A result waiting to be recorded while the person connects a wallet (some wallets reload the page). */
+const PENDING = "uprali:pending-record";
+interface Pending {
+  at: number;
+  template: TemplateId;
+  question: string;
+  asked: string;
+  result: Result;
+}
+function savePending(p: Omit<Pending, "at">) {
+  try {
+    sessionStorage.setItem(PENDING, JSON.stringify({ ...p, at: Date.now() }));
+  } catch {
+    /* storage off: the result stays on screen when the wallet opens in a popup */
+  }
+}
+function takePending(): Pending | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING);
+    sessionStorage.removeItem(PENDING);
+    const p = raw ? (JSON.parse(raw) as Pending) : null;
+    return p && Date.now() - p.at < 60 * 60_000 ? p : null;
+  } catch {
+    return null;
+  }
 }
 
 interface Result {
@@ -73,6 +102,7 @@ export function DecideApp() {
   const [recorded, setRecorded] = useState<Recorded | null>(null);
   const [code, setCode] = useState("");
   const [historyAccount, setHistoryAccount] = useState<string | null>(null);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [parent, setParent] = useState<{ id: string; version: number; title: string } | null>(null);
   /** Fields filled from an advisor suggestion, not typed by the person. Typing over one makes it theirs. */
   const [suggested, setSuggested] = useState<Record<string, true>>({});
@@ -81,7 +111,10 @@ export function DecideApp() {
   useEffect(() => {
     fetch("/api/app/session")
       .then((r) => r.json())
-      .then((s: { account: string | null }) => setHistoryAccount(s.account))
+      .then((s: { account: string | null; google?: { email: string } | null }) => {
+        setHistoryAccount(s.account);
+        setGoogleEmail(s.google?.email ?? null);
+      })
       .catch(() => undefined);
     // "Re-run with new numbers" from the History page: load that run's question and numbers.
     const from = new URLSearchParams(window.location.search).get("from");
@@ -125,6 +158,23 @@ export function DecideApp() {
       .catch(() => setError("Couldn't reach the Uprali server."));
     return () => unsub.current?.();
   }, []);
+
+  // Back from connecting a wallet: put the result that was waiting to be recorded back on screen.
+  useEffect(() => {
+    if (!account || result) return;
+    const p = takePending();
+    if (!p) return;
+    setTemplate(p.template);
+    setQuestion(p.question);
+    setAsked(p.asked);
+    setResult(p.result);
+  }, [account, result]);
+
+  function connectToSave() {
+    if (!result || !wallet) return;
+    savePending({ template, question, asked, result });
+    wallet.modal.show();
+  }
 
   const who = account ?? (demo ? "demo-user" : null);
   const groups = useMemo(() => {
@@ -240,6 +290,7 @@ export function DecideApp() {
       if (wallet && account) {
         const { txHash } = await recordWithWallet(wallet, { hash: result.fingerprint, kind: s.kind, caseId: s.decisionId, version: s.version });
         setRecorded({ by: account, txUrl: txHash ? explorerTx(txHash) : null, verifyUrl: result.verifyUrl, network: "NEAR testnet" });
+        takePending();
         // Let the history see it on the ledger. The server looks the fingerprint up itself.
         if (result.runId) await markInHistory(result.runId, txHash);
       } else {
@@ -354,7 +405,9 @@ export function DecideApp() {
               ? config.relayerCodeEnabled
                 ? "Recording on NEAR testnet needs a wallet sign-in or the access code."
                 : "Sign in with a NEAR wallet to record on testnet."
-              : "Decisions are recorded on the local demo ledger."}
+              : config.localDemo
+                ? "Running on this computer: decisions are recorded on a local demo ledger."
+                : "Saving on NEAR isn't switched on for this site yet."}
           </span>
           {config.wallet && <button className="btn small" onClick={() => wallet?.modal.show()}>Sign in with NEAR wallet</button>}
         </>
@@ -508,16 +561,59 @@ export function DecideApp() {
                           </div>
                         ) : result.memo.status === "needs_human" ? (
                           <p className="muted">Fill in the numbers marked &quot;Needs a human&quot; before recording.</p>
-                        ) : (
+                        ) : account ? (
                           <div className="row">
-                            {!account && config.wallet && config.relayerCodeEnabled && (
-                              <input className="input code" placeholder="Demo access code" value={code} onChange={(e) => setCode(e.target.value)} />
-                            )}
                             <button className="btn primary" onClick={record} disabled={busy !== ""}>
-                              {busy === "recording" ? "Recording…" : account ? `Sign and record as ${account}` : "Record decision"}
+                              {busy === "recording" ? "Recording…" : `Sign and record as ${account}`}
                             </button>
                             <button className="btn" onClick={download}>Download snapshot</button>
                           </div>
+                        ) : config.wallet ? (
+                          <div className="save-near">
+                            <p>
+                              <strong>Want to save this decision?</strong> Connect your NEAR testnet wallet first. You&apos;ll come straight back to this result and record it with one click.
+                            </p>
+                            <div className="row">
+                              <button className="btn primary" onClick={connectToSave} disabled={!wallet || busy !== ""}>Connect NEAR wallet to save</button>
+                              <button className="btn" onClick={download}>Download snapshot</button>
+                            </div>
+                            <TestnetHelp />
+                            {config.relayerCodeEnabled && (
+                              <details className="small">
+                                <summary>Have the demo access code instead?</summary>
+                                <div className="row">
+                                  <input className="input code" placeholder="Demo access code" value={code} onChange={(e) => setCode(e.target.value)} />
+                                  <button className="btn" onClick={record} disabled={busy !== "" || !code.trim()}>{busy === "recording" ? "Recording…" : "Record with the code"}</button>
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        ) : config.localDemo ? (
+                          <div className="row">
+                            <button className="btn primary" onClick={record} disabled={busy !== ""}>
+                              {busy === "recording" ? "Recording…" : "Record on the local demo ledger"}
+                            </button>
+                            <button className="btn" onClick={download}>Download snapshot</button>
+                          </div>
+                        ) : (
+                          <div className="save-near">
+                            <p className="muted">
+                              Saving on NEAR isn&apos;t switched on for this site yet, so this decision can&apos;t be recorded here. The site owner sets it up once on the <a href="/setup">Setup</a> page. You can still download the snapshot.
+                            </p>
+                            <div className="row"><button className="btn" onClick={download}>Download snapshot</button></div>
+                          </div>
+                        )}
+                        {config.googleSignIn && (
+                          googleEmail ? (
+                            <p className="muted small">Kept in your <a href="/history">History</a> as {googleEmail}.</p>
+                          ) : (
+                            <div className="keep-history small">
+                              <p>
+                                <strong>Want to come back to your scenarios later?</strong> Sign in with Google to keep them in your History on any device. Recording on NEAR still uses your wallet.
+                              </p>
+                              <a className="btn" href={`/api/auth/google?return=${encodeURIComponent(result.runId ? `/history?id=${result.runId}` : "/history")}`}>Sign in with Google</a>
+                            </div>
+                          )
                         )}
                       </div>
                     </>
