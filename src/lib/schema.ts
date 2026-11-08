@@ -84,4 +84,4 @@ export const decideBody = buildVsBuyBody
   });
 
 /** The business-case API and MCP tool: a template is required. */
-export const caseBody = decideBody.refine((b) => isCaseTemplate(b.template), { path: ["template"], message: "use one of new_product, new_feature, gtm_expansion, ai_investment" });
+export const caseBody = decideBody.refine((b) => isCaseTemplate(b.template), { path: ["template"], message: "use one of new_product, gtm_expansion, ai_investment" });

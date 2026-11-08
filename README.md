@@ -2,7 +2,7 @@
 
 **Live app:** LIVE-APP-LINK (add the link) · **Demo video:** DEMO-VIDEO-LINK (add the link) · **Built for:** NEAR Hackathon, Privacy & Private AI track
 
-> **Judging? 30 seconds, no wallet.** Open the live app's **/sample** page. Read a real decision memo where every number shows its source and owner, with the NEAR AI Cloud **Verified** badge. Press **Verify it yourself**: the page works out the fingerprint in your browser and finds it recorded on NEAR testnet (**Match**). Then press **Try to cheat: make building $50,000 cheaper** and watch it turn into **No match**.
+> **Judging?** See [For judges](#for-judges). On the live app you sign in with a **NEAR testnet** wallet, run a decision, record it on NEAR, and check it in History: **Match**, with a link to the transaction. Running it locally needs no wallet and no keys (demo mode, below).
 
 **Uprali is the verifiable approval layer for agent spending.** Before an agent buys a tool or builds one, it asks Uprali. Uprali gives it a decision memo where every number has a source and an owner, waits for a person to sign off, and records a proof of the decision on NEAR. The analysis runs privately on **NEAR AI Cloud**, so company finances never leave a verified enclave.
 
@@ -17,7 +17,7 @@ The first decision it covers in depth is the one teams get wrong all the time: *
 - **Agents can use it directly.** The same tool is an **MCP server** (for Claude Desktop, Claude Code or any MCP client), a plain **HTTP API** with API keys, and a **Slack app** (`/uprali`).
 - **Every decision is kept.** The **History** page lists past decisions with their date, question, recommendation and proof. Open one to see the full memo, or re-run it with changed numbers as a new version of the same decision.
 
-- **Five decision templates.** Build vs buy is the deepest. Four business cases sit beside it: **Launch a new product**, **Add a feature**, **Go-to-market expansion** and **AI investment ROI**. Each groups its drivers into the cards of the people who own them (Product, Sales, Finance and so on), each card shows its formula, and each case gets a 3-year model with **Model**, **Unit Economics**, **Summary P&L** and **Scenarios** tabs, plus net present value, return on investment and payback.
+- **Four decision templates.** Build vs buy is the deepest. Three business cases sit beside it: **Launch a new product**, **Go-to-market expansion** and **AI investment ROI**. Each groups its drivers into the cards of the people who own them (Product, Sales, Finance and so on), each card shows its formula, and each case gets a 3-year model with **Model**, **Unit Economics**, **Summary P&L** and **Scenarios** tabs, plus net present value, return on investment and payback.
 
 **Next step:** settle approved spend with **NEAR Intents**, so the payment an agent makes is tied to the decision that approved it.
 
@@ -29,13 +29,30 @@ Built for the NEAR Hackathon, **Privacy & Private AI** track.
 |---|---|---|
 | Build vs buy | Build the tool ourselves or keep paying for one | Buy HubSpot Starter |
 | Launch a new product | Revenue from customers × price against build and running costs | Go |
-| Add a feature | Add-on revenue and kept customers against engineering time and upkeep | Go |
 | Go-to-market expansion | New-market revenue against reps, launch and support costs, with a ramp | Go, with a negative downside |
 | AI investment ROI | Seats and rollout against time saved | Pilot first |
 
 AI investment keeps **cash** apart from **freed-up time**. Time saved only counts as cash when Finance says how much of it becomes cash, and an estimated baseline (not measured) is cut by 30% until someone measures it. So a case built only on a vendor's claim comes out as **Pilot first**, never as savings.
 
 The models only read the numbers stated in the question and write the prose. Code works out every figure. Scenarios move only the key drivers by 20% in each direction; assumptions stay as they are. Every case memo is fingerprinted, recorded, kept in history and verified the same way as build vs buy.
+
+## For judges
+
+The live app uses **NEAR wallet sign-in**, so each decision you make is saved to your history and recorded on NEAR under your own account.
+
+1. Open the live app and press **Sign in with NEAR wallet**. Pick Intear or Meteor.
+2. Pick **Build vs buy**, keep the example question and press **Run the decision**. **You should see** the memo, where every number shows its source and owner.
+3. Press **Sign and record as** your account and approve in the wallet. **You should see** "Recorded on NEAR testnet" and **See the transaction on the NEAR explorer**.
+4. Press **See it in History**, open the decision and press **Verify**. **You should see** **Match**. Press **Try to cheat: make building $50,000 cheaper** and it turns into **No match**.
+
+**Only have a mainnet account (name.near)?** Uprali records on NEAR testnet, where mainnet accounts don't exist. Making a free testnet account takes about a minute:
+
+1. Open [wallet.near.org](https://wallet.near.org) and pick **Intear Wallet** (Meteor works too).
+2. Switch the wallet to **testnet** and create a name that ends in **.testnet**.
+3. Save the recovery phrase it shows you.
+4. Come back to Uprali and press **Sign in with NEAR wallet**.
+
+The app spots a `.near` account at sign-in and shows the same steps. If something doesn't work, `/api/health` lists what's set up on the server (setting names only, never values).
 
 ## Try it in two minutes (no keys needed)
 
@@ -48,7 +65,7 @@ Needs Node 22.18 or later.
 5. Open the link. **You should see** **Match**. Download the snapshot, change one number in it, paste it in and press **Check**. **You should see** **No match**.
 6. Open **History**. **You should see** that decision, with **Recorded**. Open it and press **Re-run with new numbers**: the next run is saved as version 2.
 7. Press **+ New case**, pick **AI investment ROI** and press **Build the case**. **You should see** **Pilot first**, the owner cards with their formulas, and the model in the panel on the right.
-8. Run `npm test`. **You should see** `Tests  98 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
+8. Run `npm test`. **You should see** `Tests  104 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
 
 ### The same tool from an agent (MCP)
 
@@ -91,13 +108,13 @@ curl -s -X POST localhost:3000/api/v1/build-vs-buy \
 | `POST /api/v1/build-vs-buy` | Runs a decision. Body: `question`, `inputs` (by field, each a number, text, or `{value, source, owner, is_assumption}`), `record`, `approved_by`, `decided_by` | Yes |
 | `GET /api/v1/templates` | Lists every template with its owner cards and fields | No |
 | `GET /api/v1/business-case` | Lists the four business-case templates and their fields | No |
-| `POST /api/v1/business-case` | Builds a business case. Body: `template` (`new_product`, `new_feature`, `gtm_expansion`, `ai_investment`), `question`, `inputs` (that template's fields only), `record`, `approved_by`, `decided_by`, `parent_id` | Yes |
+| `POST /api/v1/business-case` | Builds a business case. Body: `template` (`new_product`, `gtm_expansion`, `ai_investment`), `question`, `inputs` (that template's fields only), `record`, `approved_by`, `decided_by`, `parent_id` | Yes |
 | `POST /api/v1/decisions/record` | Records a snapshot's fingerprint with the server's relayer account | Yes |
 | `POST /api/v1/decisions/verify` | Checks a `snapshot` or a `fingerprint` against the ledger | No |
 | `GET /api/v1/decisions` | Past decisions made with this API key, newest first (`?limit=`, `?decision_id=` for one decision's versions) | Yes |
 | `GET /api/v1/decisions/{id}` | One past decision in full: memo, the numbers it was given, snapshot | Yes |
 | `POST /api/v1/advise` | Suggests existing tools that may cost less. Body: `question`, `answers` (`must_haves`, `seats`, `budget_per_year`, `current_tool`, `integrations`). Every suggestion is labelled "Suggestion, verify". `GET` lists the questions | Yes |
-| `GET /api/sample` | The sample decision for judges, already recorded | No |
+| `GET /api/health` | What's set up on the server: NEAR settings (names only), whether the ledger contract answers, NEAR AI and the database | No |
 | `GET /api/attestation` | Fetches NEAR AI Cloud's attestation report with a fresh nonce and checks it | No |
 | `GET /api/config` | Shows what's configured, never a secret | No |
 | `/mcp` | MCP server with `build_vs_buy`, `business_case`, `list_templates`, `suggest_tools`, `verify_decision` and `list_decisions` | Yes |
@@ -116,30 +133,31 @@ The full script, with the shot list and the words to say, is in the Claude Doc "
 
 ## Uprali for Slack
 
-An extra on top of the hackathon build: people type `/uprali` and a build or buy question in any Slack channel.
+People ask **@uprali-mvp** in a channel, message it directly, or type `/uprali`, with any business decision: build vs buy, a new product, a go-to-market expansion or an AI investment.
 
-- Uprali answers in the channel with the 3-year cost of each side, why, the prototype trap, and how many numbers came from people versus the analyst's benchmarks.
+- It picks the template from the question. A prefix makes it certain: `bvb:`, `product:`, `gtm:` or `ai:`. When the question isn't clear, it asks which kind of decision it is, with a button for each.
+- It answers in a thread with the 3-year result (net cash, NPV, ROI, payback), the year-by-year numbers, the scenarios, why, and the biggest risk. The numbers it estimated itself are marked **Suggestion, verify**.
 - The numbers only a person can give show as boxes in the message. Anyone types a number and presses Enter, and the decision updates, with that number owned by them.
-- **Approve** adds the person to the decision's approvers. **Record on NEAR** records the fingerprint through the relayer and adds a **Verify this decision** link.
-- Every request from Slack is checked against the app's signing secret and refused if it's older than 5 minutes. Replies go to the request's own Slack reply address (only `hooks.slack.com` is accepted), so the app only needs the `commands` permission and keeps no workspace tokens or messages. The decision's state lives in the message itself.
+- **Approve** adds the person to the decision's approvers. **Record on NEAR** records the fingerprint through the relayer and adds a **Verify this decision** link. Every run is kept in history; `/uprali history` shows your last 10.
+- Every request from Slack is checked against the app's signing secret and refused if it's older than 5 minutes. Retries and repeated events are ignored. The decision's state lives in the message itself.
+- Mentions and direct messages need the bot's token. It's kept encrypted after **Add to Slack**, or set as `SLACK_BOT_TOKEN`. The app asks Slack for `commands`, `app_mentions:read`, `chat:write` and `im:history` only.
 - It stays off until `SLACK_SIGNING_SECRET` is set, so it can't affect the rest of the app.
-- `@Uprali` mentions aren't included: they need a stored token per workspace, so a database.
 
-**Setting it up (for Aly, about 10 minutes):**
+**Setting it up or updating it (for Aly, about 10 minutes):**
 
 1. Open `/slack` on the live app and press **Copy the manifest**. It already has the live app's address in it. (`slack/manifest.json` in the repo is the same, with `YOUR-APP` to replace.)
-2. At api.slack.com/apps press **Create New App**, then **From a manifest**, pick your test workspace, choose **JSON**, paste, and press **Create**.
-3. On the app's **Basic Information** page copy **Client ID**, **Client Secret** and **Signing Secret** into Vercel as `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and `SLACK_SIGNING_SECRET`, then redeploy.
-4. Open `/slack` again and press **Add to Slack**, then **Allow**. **You should see** "Added to" your workspace's name.
-5. In any channel type `/uprali help`, then the example CRM question.
-6. To let other workspaces install it: in the Slack app, open **Manage Distribution**, tick the checklist and press **Activate Public Distribution**. Then anyone can use the **Add to Slack** button on `/slack`.
+2. At api.slack.com/apps open the **uprali-mvp** app (or press **Create New App**, then **From a manifest**), open **App Manifest**, paste, and press **Save**. Slack checks the events address and should say **Verified**.
+3. On **Basic Information** make sure **Client ID**, **Client Secret** and **Signing Secret** are in Vercel as `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and `SLACK_SIGNING_SECRET`.
+4. Press **Reinstall to Workspace** (or **Install**), then **Allow**.
+5. On **OAuth & Permissions** copy the **Bot User OAuth Token** (it starts with `xoxb-`) into Vercel as `SLACK_BOT_TOKEN`, then redeploy.
+6. In a channel type `/invite @uprali-mvp`, then `@uprali-mvp should we build our own CRM or keep HubSpot?`. **You should see** a reply in the thread with the 3-year result, estimates marked **Suggestion, verify**, boxes for missing numbers, and **Approve** and **Record on NEAR**.
 
-## Advice and voice
+## Advice
 
 - **The form.** Numbers are grouped: **Buy an existing tool** (which product and plan, its yearly subscription for every seat, setup, price rises, admin time) and **Build it yourself** (prototype, engineer cost, integrations, upkeep), with a line under each box saying what goes in it.
 - **Advice before you decide.** Press **Not sure what to buy? Get advice first** and answer five questions: what it must do, how many people use it, the budget, what you use today and what it must connect to. Uprali suggests two to four existing tools that may cover that for less, cheapest first, with a rough price per seat, what each covers and what it may not. The model runs privately on NEAR AI Cloud when it's set up; with no model it uses a rough built-in list.
 - **Suggestions are never facts.** Every suggested tool, price and line of advice carries a **Suggestion, verify** tag. Press **Compare this one** to fill the buy fields with it; those numbers go into the memo as the agent's, with the same tag and the source "verify the price on the vendor's site". Typing over a field makes it yours again.
-- **Voice.** A mic button on the decision box and on each advisor question uses the browser's own speech recognition (Chrome, Edge, Safari). **Read it aloud** reads the memo's 30-second version. Agents get the same advice through the MCP tool `suggest_tools`.
+- **Voice (coming next, off for now).** A mic button and **Read it aloud** are built on the browser's own speech tools but are switched off for the hackathon, because they weren't checked in a real browser in time. Set `NEXT_PUBLIC_UPRALI_VOICE=on` to try them. Agents get the same advice through the MCP tool `suggest_tools`.
 
 ## Decision history
 
@@ -247,14 +265,16 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 | `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `NEAR_RPC_URL` | Ledger contract and the relayer agents record through (testnet only) |
 | `RECORD_ACCESS_CODE` | Lets the demo screen record through the relayer without a wallet when this code is typed |
 | `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | Uprali for Slack (see `/slack`) |
+| `SLACK_BOT_TOKEN`, `SLACK_TOKEN_KEY` | The bot token (`xoxb-…`) that lets @uprali-mvp answer mentions and direct messages, if it wasn't installed through **Add to Slack**; and an optional key for encrypting stored bot tokens |
+| `NEXT_PUBLIC_UPRALI_VOICE` | `on` brings back the mic and read-aloud buttons (off by default) |
 | `POSTGRES_URL` or `DATABASE_URL` | Postgres for decision history (set by Vercel's Neon or Supabase integration). Without it, history is kept in memory |
 | `SESSION_SECRET` | Optional: signs the history sign-in cookie. Without it, a key is derived from the database address |
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 98 tests, including all four business-case templates, their scenarios, payback and NPV, the AI cash and capacity split, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the sample decision's Match and No match, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 104 tests, including all four business-case templates, their scenarios, payback and NPV, the AI cash and capacity split, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, the health page, and the Slack app's signature checks, command, mentions, direct messages, template picking, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
-**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's faucet request and contract deploy, the sample decision recorded on testnet, a wallet's sign-in message for history, the Slack app against real Slack, and the new workspace look in a real browser. Run the demo script once on the live deploy before recording the video.
+**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's faucet request and contract deploy, a wallet's sign-in message for history, the Slack app against real Slack, and the new workspace look in a real browser. Run the demo script once on the live deploy before recording the video.
 
 `npm audit` reports one high finding left in Meteor Wallet's SDK (`decode-uri-component` under `query-string` 7). The SDK only calls `stringify`, never the decoder the advisory is about, and the newer `query-string` breaks its import, so it stays until Meteor updates.
 
@@ -267,7 +287,6 @@ src/lib/ledger/      NEAR ledger client and the local demo ledger
 src/lib/service.ts   shared by the API, MCP server and demo screen
 src/lib/history.ts   decision history: Postgres, or memory when no database is set
 src/lib/identity.ts  whose history: NEAR sign-in message (NEP-413), browser, Slack user, API key
-src/lib/sample.ts    the sample decision for judges
 src/app/mcp/         MCP server
 src/app/api/         HTTP API, and Slack under api/slack
 src/lib/slack/       Uprali for Slack: signatures, messages, install

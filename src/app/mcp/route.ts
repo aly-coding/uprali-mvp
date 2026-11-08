@@ -70,7 +70,7 @@ function makeHandler(base: string) {
         {
           title: "List decision templates",
           description:
-            "List Uprali's decision templates: build vs buy, launch a new product, launch a new feature, go-to-market expansion and AI investment ROI. " +
+            "List Uprali's decision templates: build vs buy, launch a new product, go-to-market expansion and AI investment ROI. " +
             "Each comes with its owner cards (who should stand behind which numbers), the formula on each card and every field it takes, with the question to ask " +
             "and the benchmark used when nobody knows. Call this before business_case to know which fields to pass.",
           inputSchema: z.object({}),
@@ -86,7 +86,7 @@ function makeHandler(base: string) {
         {
           title: "Three-year business case",
           description:
-            "Build a three-year business case from a template: new_product, new_feature, gtm_expansion or ai_investment (for build vs buy, use build_vs_buy). " +
+            "Build a three-year business case from a template: new_product, gtm_expansion or ai_investment (for build vs buy, use build_vs_buy). " +
             "The arithmetic runs in code: driver-based model by year, unit economics, summary P&L, net present value, ROI, payback, and downside and upside " +
             "scenarios that move the key drivers 20%. For AI investment, cash is kept apart from freed-up time, and an estimated (not measured) baseline is cut " +
             "until someone measures it. Pass what you know in inputs (field keys from list_templates), each optionally with its source and owner; anything " +

@@ -82,9 +82,9 @@ describe("business-case templates", () => {
   });
 
   it("numbers a person typed win over the text and count as theirs", async () => {
-    const m = await decideCase({ template: "new_feature", question: CASE_TEMPLATES.new_feature.prompt, inputs: { build_weeks: { value: 20, source: "Sprint plan", owner: "human" } } }, DEMO);
-    expect(m.inputs.find((i) => i.key === "build_weeks")).toMatchObject({ value: 20, owner: "human", source: "Sprint plan", isAssumption: false });
-    expect(m.model.find((r) => r.key === "build_cost")!.values[1]).toBe(20 * 4000);
+    const m = await decideCase({ template: "new_product", question: CASE_TEMPLATES.new_product.prompt, inputs: { build_cost: { value: 90_000, source: "Agency quote", owner: "human" } } }, DEMO);
+    expect(m.inputs.find((i) => i.key === "build_cost")).toMatchObject({ value: 90_000, owner: "human", source: "Agency quote", isAssumption: false });
+    expect(m.model.find((r) => r.key === "build")!.values[1]).toBe(90_000);
   });
 
   it("reads numbers from text only when they're there", () => {
@@ -103,17 +103,17 @@ describe("business-case templates", () => {
   });
 
   it("scenarios move only the key drivers", () => {
-    const t = CASE_TEMPLATES.new_feature;
-    const base = { active_customers: 1000, adoption_pct: 25, arpa_month: 80, addon_price_month: 10, churn_drop_pts: 1, build_weeks: 10, engineer_weekly_cost: 4000, upkeep_pct: 20, run_cost_per_year: 3000, discount_rate_pct: 10 };
+    const t = CASE_TEMPLATES.new_product;
+    const base = { new_customers_y1: 100, new_customer_growth_pct: 50, price_per_month: 50, annual_churn_pct: 15, cac: 800, marketing_fixed_per_year: 20_000, build_cost: 60_000, team_cost_per_year: 80_000, hosting_per_customer_month: 5, support_payments_pct: 8, discount_rate_pct: 10 };
     const s = scenariosFor(t, base);
-    expect(s[0].flex).toContain("engineer-weeks to build");
+    expect(s[0].flex.toLowerCase()).toContain("price per customer per month");
     expect(s[0].flex).not.toContain("discount");
   });
 
   it("fingerprints a case snapshot with its template and metrics, and build vs buy snapshots keep no metrics key", async () => {
-    const m = await decideCase({ template: "new_feature", question: CASE_TEMPLATES.new_feature.prompt }, DEMO);
+    const m = await decideCase({ template: "new_product", question: CASE_TEMPLATES.new_product.prompt }, DEMO);
     const s = buildSnapshot(m, { decidedBy: "test", decidedAt: "2026-11-08T00:00:00.000Z" });
-    expect(s.template).toBe("new_feature");
+    expect(s.template).toBe("new_product");
     expect(s.metrics?.npv).toBe(m.metrics!.npv);
     expect(s.totals).toEqual({ buy: null, build: null, difference: null });
     const changed = { ...s, metrics: { ...s.metrics!, npv: s.metrics!.npv + 1 } };

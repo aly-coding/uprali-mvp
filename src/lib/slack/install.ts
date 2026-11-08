@@ -1,12 +1,17 @@
 /**
  * "Add to Slack": the OAuth install flow that lets any workspace add Uprali, and the app manifest
- * Aly pastes into Slack to create the app. Uprali only asks for the `commands` scope and answers
- * through each request's response_url, so the token Slack returns at install is not kept.
+ * Aly pastes into Slack to create or update the app. The bot token Slack returns at install is kept
+ * encrypted (see tokens.ts) so @uprali-mvp can answer mentions and direct messages in threads.
  */
+import { saveBotToken } from "./tokens";
+
 type Env = Record<string, string | undefined>;
 
 export const STATE_COOKIE = "uprali_slack_state";
-export const SCOPES = ["commands"];
+/** commands: /uprali. app_mentions:read and im:history: hear @uprali-mvp and direct messages. chat:write: answer in threads. */
+export const SCOPES = ["commands", "app_mentions:read", "chat:write", "im:history"];
+export const BOT_EVENTS = ["app_mention", "message.im"];
+export const BOT_NAME = "uprali-mvp";
 
 export function installReady(env: Env = process.env): boolean {
   return Boolean(env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_SIGNING_SECRET);
@@ -37,8 +42,9 @@ export async function exchangeCode(code: string, base: string, env: Env, f: type
       redirect_uri: redirectUri(base),
     }),
   });
-  const data = (await res.json().catch(() => null)) as { ok?: boolean; team?: { name?: string } } | null;
+  const data = (await res.json().catch(() => null)) as { ok?: boolean; team?: { id?: string; name?: string }; access_token?: string; token_type?: string } | null;
   if (!data?.ok) return null;
+  if (data.team?.id && data.access_token?.startsWith("xoxb-")) await saveBotToken(data.team.id, data.access_token, env);
   return (data.team?.name || "your workspace").slice(0, 80);
 }
 
@@ -47,17 +53,19 @@ export function slackManifest(base: string) {
   return {
     display_information: {
       name: "Uprali",
-      description: "Build or buy, decided with proof.",
+      description: "Business decisions with sourced numbers, a human sign-off and proof on NEAR.",
       long_description:
-        "Ask /uprali a build or buy question. Uprali works out the 3-year cost of each side, shows where every number came from and who owns it, flags the numbers only a person can give, and records the decision's fingerprint on NEAR testnet so anyone can check it later. It runs on private AI (NEAR AI Cloud) when configured.",
-      background_color: "#1d4ed8",
+        "Mention @uprali-mvp, message it, or type /uprali with a business decision: build vs buy, a new product, a go-to-market expansion or an AI investment. Uprali works out the 3-year result, shows where every number came from and who owns it, marks its own estimates as suggestions to verify, asks for the numbers only a person can give, and records the approved decision's fingerprint on NEAR testnet so anyone can check it later. It runs on private AI (NEAR AI Cloud) when configured.",
+      background_color: "#16294a",
     },
     features: {
+      app_home: { home_tab_enabled: false, messages_tab_enabled: true, messages_tab_read_only_enabled: false },
+      bot_user: { display_name: BOT_NAME, always_online: true },
       slash_commands: [
         {
           command: "/uprali",
           url: `${base}/api/slack/commands`,
-          description: "Build or buy? Get a costed decision with sources",
+          description: "A business decision, costed over 3 years with sources",
           usage_hint: "Should we build our own CRM or keep paying $720 a year for HubSpot?",
           should_escape: false,
         },
@@ -68,6 +76,7 @@ export function slackManifest(base: string) {
       scopes: { bot: SCOPES },
     },
     settings: {
+      event_subscriptions: { request_url: `${base}/api/slack/events`, bot_events: BOT_EVENTS },
       interactivity: { is_enabled: true, request_url: `${base}/api/slack/interactions` },
       org_deploy_enabled: false,
       socket_mode_enabled: false,

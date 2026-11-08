@@ -61,19 +61,6 @@ export default function Verify() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hash = params.get("hash") || "";
-    if (params.get("sample") === "1") {
-      // The judge path: load the sample's snapshot from the server, then check it here.
-      fetch("/api/sample")
-        .then((r) => r.json())
-        .then((data) => {
-          const snap = JSON.stringify(data.decision.snapshot, null, 2);
-          setFingerprint(data.decision.fingerprint);
-          setText(snap);
-          void check(snap, data.decision.fingerprint);
-        })
-        .catch(() => setError("Couldn't load the sample decision."));
-      return;
-    }
     if (!/^[0-9a-f]{64}$/.test(hash)) return;
     setFingerprint(hash);
     let saved = "";

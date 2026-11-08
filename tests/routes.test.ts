@@ -147,11 +147,11 @@ describe("MCP server", () => {
       jsonrpc: "2.0",
       id: 4,
       method: "tools/call",
-      params: { name: "business_case", arguments: { template: "new_feature", question: "1,200 active customers paying $80 a month; 8 engineer-weeks to build; we'd charge $20 a month extra.", inputs: { adoption_pct: { value: 30, owner: "agent", source: "Similar add-on" } } } },
+      params: { name: "business_case", arguments: { template: "ai_investment", question: "12 analysts spend 10 hours a week on reports; an AI tool at $30 per seat saves about 25%.", inputs: { adoption_pct: { value: 30, owner: "agent", source: "Similar add-on" } } } },
     });
-    expect(r.result.structuredContent.template).toBe("new_feature");
+    expect(r.result.structuredContent.template).toBe("ai_investment");
     expect(r.result.structuredContent.snapshot.inputs.find((i: { key: string }) => i.key === "adoption_pct")).toMatchObject({ value: 30, owner: "agent", isAssumption: true });
-    const bad = await call({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "business_case", arguments: { template: "new_feature", inputs: { buy_annual_cost: 1 } } } });
+    const bad = await call({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "business_case", arguments: { template: "ai_investment", inputs: { buy_annual_cost: 1 } } } });
     expect(bad.result.isError).toBe(true);
   });
 });

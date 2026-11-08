@@ -8,7 +8,7 @@ import { Badges } from "./MemoView";
 
 const TEMPLATES = templateList();
 const usd = (n: number) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
-const ICON: Record<TemplateId, string> = { build_vs_buy: "⇄", new_product: "◆", new_feature: "✚", gtm_expansion: "↗", ai_investment: "✦" };
+const ICON: Record<TemplateId, string> = { build_vs_buy: "⇄", new_product: "◆", gtm_expansion: "↗", ai_investment: "✦" };
 
 /** The starting templates, as cards. */
 export function TemplatePicker({ value, onPick, compact = false }: { value: TemplateId | null; onPick: (id: TemplateId) => void; compact?: boolean }) {

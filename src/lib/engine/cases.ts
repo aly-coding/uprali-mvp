@@ -2,14 +2,14 @@ import type { FieldDef } from "./buildVsBuy";
 import type { Unit } from "./types";
 
 /**
- * Driver-based business-case templates: launch a product, launch a feature, expand to a new
+ * Driver-based business-case templates: launch a product, expand to a new
  * market, and the return on an AI investment. Each one is a set of drivers grouped into owner
  * cards, and a three-year model worked out in code, so a model can never change a number.
  * Build vs buy keeps its own, deeper engine in buildVsBuy.ts.
  */
 
-export type CaseTemplateId = "new_product" | "new_feature" | "gtm_expansion" | "ai_investment";
-export const CASE_TEMPLATE_IDS: CaseTemplateId[] = ["new_product", "new_feature", "gtm_expansion", "ai_investment"];
+export type CaseTemplateId = "new_product" | "gtm_expansion" | "ai_investment";
+export const CASE_TEMPLATE_IDS: CaseTemplateId[] = ["new_product", "gtm_expansion", "ai_investment"];
 export const ALL_TEMPLATE_IDS = ["build_vs_buy", ...CASE_TEMPLATE_IDS] as const;
 export type TemplateId = (typeof ALL_TEMPLATE_IDS)[number];
 
@@ -218,90 +218,6 @@ const newProduct: CaseTemplate = {
   },
 };
 
-// ---------------------------------------------------------------- Launch a new feature
-
-const RAMP = [0.4, 0.75, 1];
-
-const newFeature: CaseTemplate = {
-  id: "new_feature",
-  title: "Launch a New Feature",
-  description: "Evaluate the financial impact of adding a feature to an existing product.",
-  prompt:
-    "Evaluate the financial case for launching a new feature in our existing product. We have 1,200 active customers paying $80 a month, the feature takes 8 engineer-weeks to build, and we'd charge $20 a month extra for it.",
-  version: "1.0.0",
-  goLabel: "Build the feature",
-  cards: [
-    { id: "adoption", title: "Customers & adoption", owner: "Product · Product manager", description: "Who has access to the feature and how many start using it.", formula: "Adopters(t) = active customers × adoption target × ramp (40%, 75%, 100%)" },
-    { id: "revenue", title: "Revenue impact", owner: "Sales · Revenue lead", description: "What adopters pay extra, and revenue kept because fewer customers leave.", formula: "Benefit = adopters × add-on price × 12 + active customers × churn drop × revenue per customer × 12" },
-    { id: "build", title: "Build & run", owner: "Engineering · Engineering lead", description: "Engineering time to build it, then upkeep and running costs.", formula: "Cost = build weeks × weekly cost (year 1) + upkeep % of build + running cost" },
-    FINANCE_CARD,
-  ],
-  drivers: [
-    { key: "active_customers", label: "Active customers today", unit: "count", ask: "How many active customers could use the feature?", card: "adoption", kind: "assumption", min: 0, max: 1e9, hint: /(\d[\d,]*)\s+(?:active\s+)?(?:customers|accounts|users)/i },
-    { key: "adoption_pct", label: "Customers who adopt it (by year 3)", unit: "pct", ask: "What share of customers will use the feature once it's fully rolled out?", benchmark: 25, benchmarkSource: "Uprali default: a typical opt-in feature reaches a quarter of accounts", humanShouldConfirm: true, card: "adoption", kind: "keyDriver", favorable: "up", min: 0, max: 100 },
-    { key: "arpa_month", label: "Revenue per customer per month today", unit: "usd", ask: "What does a customer pay you per month today?", card: "revenue", kind: "assumption", min: 0, max: 1e7, hint: /paying\s+\$\s?([\d,.]+k?)\s*(?:a|per|\/)\s*month/i },
-    { key: "addon_price_month", label: "Extra price per adopter per month", unit: "usd", ask: "What would adopters pay extra per month? Enter 0 if it's included.", benchmark: 0, benchmarkSource: "Assumed included in the current price until Sales sets a price", humanShouldConfirm: true, card: "revenue", kind: "keyDriver", favorable: "up", min: 0, max: 1e6, hint: /charge\s+\$\s?([\d,.]+k?)\s*(?:a|per|\/)\s*month/i },
-    { key: "churn_drop_pts", label: "Drop in yearly churn (points)", unit: "pct", ask: "By how many percentage points would yearly churn drop because of it?", benchmark: 1, benchmarkSource: "Uprali default: a modest retention effect; confirm with retention data", humanShouldConfirm: true, card: "revenue", kind: "keyDriver", favorable: "up", min: 0, max: 100 },
-    { key: "build_weeks", label: "Engineer-weeks to build", unit: "weeks", ask: "How many engineer-weeks will the feature take to build and ship?", card: "build", kind: "keyDriver", favorable: "down", min: 0, max: 10_000, hint: /(\d+(?:\.\d+)?)\s+engineer[- ]weeks?/i },
-    { key: "engineer_weekly_cost", label: "Engineer cost per week (fully loaded)", unit: "usd_per_week", ask: "What does one engineer cost per week, fully loaded?", benchmark: 4000, benchmarkSource: "About $200k a year fully loaded, US", card: "build", kind: "assumption", min: 0, max: 100_000 },
-    { key: "upkeep_pct", label: "Upkeep per year, share of build cost", unit: "pct", ask: "What share of the build cost goes to upkeep each year?", benchmark: 20, benchmarkSource: "Common rule of thumb: 15 to 25% of build cost a year", card: "build", kind: "assumption", min: 0, max: 200 },
-    { key: "run_cost_per_year", label: "Running cost per year (hosting, tools)", unit: "usd_per_year", ask: "What does it cost to run each year: hosting, third-party APIs, tools?", benchmark: 3000, benchmarkSource: "Uprali default for a small feature", card: "build", kind: "assumption", min: 0, max: 1e9 },
-    DISCOUNT,
-  ],
-  compute(v) {
-    const active = n(v, "active_customers");
-    const adopters = RAMP.map((r) => active * (n(v, "adoption_pct") / 100) * r);
-    const addon = adopters.map((a) => a * n(v, "addon_price_month") * 12);
-    const kept = YEARS.map(() => active * (n(v, "churn_drop_pts") / 100) * n(v, "arpa_month") * 12);
-    const benefit = YEARS.map((_, i) => addon[i] + kept[i]);
-    const buildCost = n(v, "build_weeks") * n(v, "engineer_weekly_cost");
-    const build = [buildCost, 0, 0];
-    const upkeep = YEARS.map(() => buildCost * (n(v, "upkeep_pct") / 100));
-    const run = YEARS.map(() => n(v, "run_cost_per_year"));
-    const cost = YEARS.map((_, i) => build[i] + upkeep[i] + run[i]);
-    const net = YEARS.map((_, i) => benefit[i] - cost[i]);
-    const perAdopter = adopters.map((a, i) => (a > 0 ? benefit[i] / a : null));
-    const costPerAdopter = adopters.map((a, i) => (a > 0 ? cost[i] / a : null));
-    return {
-      model: [
-        header("adoption", "Customers & adoption"),
-        row("active", "Active customers", "adoption", "driver", "count", [active, active, active, active]),
-        row("adopters", "Adopters", "adoption", "computed", "count", [0, ...adopters], { keyDriver: true, formula: "Active × adoption × ramp" }),
-        header("revenue", "Revenue impact"),
-        row("addon", "Add-on revenue", "revenue", "computed", "usd", [0, ...addon], { formula: "Adopters × add-on price × 12" }),
-        row("kept", "Revenue kept from lower churn", "revenue", "computed", "usd", [0, ...kept], { formula: "Active × churn drop × price × 12" }),
-        row("benefit", "Total benefit", "revenue", "total", "usd", [0, ...benefit]),
-        header("build", "Build & run"),
-        row("build_cost", "Build", "build", "computed", "usd", [null, ...build], { formula: "Engineer-weeks × weekly cost" }),
-        row("upkeep", "Upkeep", "build", "computed", "usd", [null, ...upkeep]),
-        row("run", "Running cost", "build", "driver", "usd", [null, ...run]),
-        header("finance", "Financial impact"),
-        row("net", "Net cash", "finance", "total", "usd", [null, ...net]),
-      ],
-      unitEconomics: [
-        row("ue_benefit", "Benefit per adopter per year", "revenue", "computed", "usd", [null, ...perAdopter]),
-        row("ue_cost", "Cost per adopter per year", "build", "computed", "usd", [null, ...costPerAdopter]),
-        row("ue_arpa", "Revenue per customer per month", "revenue", "driver", "usd", [n(v, "arpa_month"), n(v, "arpa_month") + n(v, "addon_price_month") * (n(v, "adoption_pct") / 100) * RAMP[0], n(v, "arpa_month") + n(v, "addon_price_month") * (n(v, "adoption_pct") / 100) * RAMP[1], n(v, "arpa_month") + n(v, "addon_price_month") * (n(v, "adoption_pct") / 100) * RAMP[2]], { formula: "Today's price + add-on × share adopting" }),
-      ],
-      pnl: [
-        row("p_benefit", "Incremental revenue", "result", "total", "usd", [0, ...benefit]),
-        row("p_build", "Build", "result", "computed", "usd", [null, ...build]),
-        row("p_upkeep", "Upkeep and running", "result", "computed", "usd", [null, ...upkeep.map((x, i) => x + run[i])]),
-        row("p_net", "Net cash", "result", "total", "usd", [null, ...net]),
-      ],
-      benefitByYear: benefit.map(r0),
-      costByYear: cost.map(r0),
-      netByYear: net.map(r0),
-      headlines: {
-        adoption: { label: "Adopters by year 3", value: r0(adopters[2]), unit: "count" },
-        revenue: { label: "Year 3 benefit", value: r0(benefit[2]), unit: "usd" },
-        build: { label: "Cost to build", value: r0(buildCost), unit: "usd" },
-      },
-      guardrails: ["Adoption tracked monthly against the ramp", "No rise in support tickets for the core product", "Upkeep stays within the yearly budget"],
-    };
-  },
-};
-
 // ---------------------------------------------------------------- Go-to-market expansion
 
 const GTM_RAMP = [0.25, 0.6, 1];
@@ -502,7 +418,6 @@ const aiInvestment: CaseTemplate = {
 
 export const CASE_TEMPLATES: Record<CaseTemplateId, CaseTemplate> = {
   new_product: newProduct,
-  new_feature: newFeature,
   gtm_expansion: gtmExpansion,
   ai_investment: aiInvestment,
 };

@@ -20,8 +20,18 @@ function recognitionClass(): (new () => Recognition) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-/** A mic button that adds what you say to a text box. */
-export function MicButton({ onText, label = "Speak" }: { onText: (text: string) => void; label?: string }) {
+/**
+ * Voice is off for the hackathon demo: it couldn't be checked in a real browser in time.
+ * Set NEXT_PUBLIC_UPRALI_VOICE=on in Vercel to bring the mic and read-aloud buttons back.
+ */
+export const VOICE_ON = process.env.NEXT_PUBLIC_UPRALI_VOICE === "on";
+
+/** A mic button that adds what you say to a text box. Shows nothing while voice is off. */
+export function MicButton(props: { onText: (text: string) => void; label?: string }) {
+  return VOICE_ON ? <MicButtonOn {...props} /> : null;
+}
+
+function MicButtonOn({ onText, label = "Speak" }: { onText: (text: string) => void; label?: string }) {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [note, setNote] = useState("");
@@ -71,8 +81,12 @@ export function MicButton({ onText, label = "Speak" }: { onText: (text: string) 
   );
 }
 
-/** Reads text aloud with the browser's own voice. */
-export function ReadAloud({ text }: { text: string }) {
+/** Reads text aloud with the browser's own voice. Shows nothing while voice is off. */
+export function ReadAloud(props: { text: string }) {
+  return VOICE_ON ? <ReadAloudOn {...props} /> : null;
+}
+
+function ReadAloudOn({ text }: { text: string }) {
   const [supported, setSupported] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   useEffect(() => setSupported(typeof window !== "undefined" && "speechSynthesis" in window), []);

@@ -1,16 +1,25 @@
 {
   "display_information": {
     "name": "Uprali",
-    "description": "Build or buy, decided with proof.",
-    "long_description": "Ask /uprali a build or buy question. Uprali works out the 3-year cost of each side, shows where every number came from and who owns it, flags the numbers only a person can give, and records the decision's fingerprint on NEAR testnet so anyone can check it later. It runs on private AI (NEAR AI Cloud) when configured.",
-    "background_color": "#1d4ed8"
+    "description": "Business decisions with sourced numbers, a human sign-off and proof on NEAR.",
+    "long_description": "Mention @uprali-mvp, message it, or type /uprali with a business decision: build vs buy, a new product, a go-to-market expansion or an AI investment. Uprali works out the 3-year result, shows where every number came from and who owns it, marks its own estimates as suggestions to verify, asks for the numbers only a person can give, and records the approved decision's fingerprint on NEAR testnet so anyone can check it later. It runs on private AI (NEAR AI Cloud) when configured.",
+    "background_color": "#16294a"
   },
   "features": {
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "uprali-mvp",
+      "always_online": true
+    },
     "slash_commands": [
       {
         "command": "/uprali",
         "url": "https://YOUR-APP.vercel.app/api/slack/commands",
-        "description": "Build or buy? Get a costed decision with sources",
+        "description": "A business decision, costed over 3 years with sources",
         "usage_hint": "Should we build our own CRM or keep paying $720 a year for HubSpot?",
         "should_escape": false
       }
@@ -22,11 +31,21 @@
     ],
     "scopes": {
       "bot": [
-        "commands"
+        "commands",
+        "app_mentions:read",
+        "chat:write",
+        "im:history"
       ]
     }
   },
   "settings": {
+    "event_subscriptions": {
+      "request_url": "https://YOUR-APP.vercel.app/api/slack/events",
+      "bot_events": [
+        "app_mention",
+        "message.im"
+      ]
+    },
     "interactivity": {
       "is_enabled": true,
       "request_url": "https://YOUR-APP.vercel.app/api/slack/interactions"

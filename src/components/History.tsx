@@ -227,13 +227,26 @@ export function History() {
                 <p>
                   ✓ Recorded on {entry.recorded.network === "near-testnet" ? "NEAR testnet" : "the local demo ledger"} by <strong>{entry.recorded.by}</strong>,{" "}
                   {when(new Date(entry.recorded.atMs).toISOString())}.
-                  {entry.recorded.txUrl && <> <a href={entry.recorded.txUrl} target="_blank" rel="noreferrer">See the transaction</a>.</>}
+                  {entry.recorded.txUrl && <> <a href={entry.recorded.txUrl} target="_blank" rel="noreferrer">See the transaction on the NEAR explorer</a>.</>}
                 </p>
               ) : (
                 <p className="muted">Not recorded yet.</p>
               )}
               <div className="row">
-                <a className="btn" href={entry.verifyUrl}>Verify it</a>
+                <a
+                  className="btn primary"
+                  href={`/verify?hash=${entry.fingerprint}`}
+                  onClick={() => {
+                    // Hand the verify page this decision's snapshot, so it can show Match and the try-to-cheat check.
+                    try {
+                      localStorage.setItem(`uprali:snapshot:${entry.fingerprint}`, JSON.stringify(entry.snapshot));
+                    } catch {
+                      /* storage off: the page still checks the fingerprint */
+                    }
+                  }}
+                >
+                  Verify
+                </a>
                 {!entry.recorded && <button className="btn" onClick={() => check(entry.id)} disabled={busy !== ""}>{busy === "check" ? "Checking…" : "Check the ledger"}</button>}
               </div>
               <h2>Change the numbers</h2>

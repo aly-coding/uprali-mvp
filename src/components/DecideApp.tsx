@@ -10,7 +10,8 @@ import { CASE_TEMPLATES, isCaseTemplate, type TemplateId } from "@/lib/engine/ca
 import { CASE_TABS, CaseForm, CaseMemoView, CaseTable, TemplatePicker, templateTitle, type CaseTab } from "./CaseView";
 import { MemoView, PrivateAiBadge } from "./MemoView";
 import { Advisor } from "./Advisor";
-import { MicButton, ReadAloud, appendSpoken } from "./Voice";
+import { MicButton, ReadAloud, VOICE_ON, appendSpoken } from "./Voice";
+import { TestnetHelp, TestnetSteps, isMainnetAccount } from "./TestnetHelp";
 import { confirmHistorySignIn, endHistorySession, explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
 
 interface Config {
@@ -211,6 +212,25 @@ export function DecideApp() {
     }
   }
 
+  /** Lets the history see the record. The server looks the fingerprint up on NEAR itself; the RPC can lag a few seconds. */
+  async function markInHistory(runId: string, txHash: string | null) {
+    for (let i = 0; i < 4; i++) {
+      try {
+        const res = await fetch(`/api/app/history/${encodeURIComponent(runId)}/check`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ txHash }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.recorded) return;
+        if (res.status === 404) return;
+      } catch {
+        /* try again */
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+
   async function record() {
     if (!result) return;
     setBusy("recording");
@@ -221,13 +241,7 @@ export function DecideApp() {
         const { txHash } = await recordWithWallet(wallet, { hash: result.fingerprint, kind: s.kind, caseId: s.decisionId, version: s.version });
         setRecorded({ by: account, txUrl: txHash ? explorerTx(txHash) : null, verifyUrl: result.verifyUrl, network: "NEAR testnet" });
         // Let the history see it on the ledger. The server looks the fingerprint up itself.
-        if (result.runId) {
-          fetch(`/api/app/history/${encodeURIComponent(result.runId)}/check`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ txHash }),
-          }).catch(() => undefined);
-        }
+        if (result.runId) await markInHistory(result.runId, txHash);
       } else {
         const res = await fetch("/api/app/record", {
           method: "POST",
@@ -271,7 +285,7 @@ export function DecideApp() {
           <h1>Before an agent buys or builds anything, Uprali checks the numbers.</h1>
           <p>
             Every spend decision gets a memo where each number shows its source and owner, a human sign-off, and a proof on NEAR. The analysis runs
-            privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product or a feature, expand into a new market, or invest in AI.
+            privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product, expand into a new market, or invest in AI.
           </p>
           <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
           {config.wallet ? (
@@ -281,7 +295,13 @@ export function DecideApp() {
           ) : (
             <p className="muted small">NEAR wallet sign-in turns on once the ledger is on testnet. Owner? <a href="/setup">Set it up</a>.</p>
           )}
-          <a className="btn" href="/sample">Judging? See a verified sample in 30 seconds, no wallet</a>
+          {config.wallet && (
+            <div className="judges small">
+              <strong>Judging?</strong> Sign in with a NEAR testnet wallet, run any decision, press <strong>Sign and record</strong>, then open
+              History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
+              <TestnetHelp />
+            </div>
+          )}
           <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
           {error && <p className="error">{error}</p>}
         </section>
@@ -298,6 +318,12 @@ export function DecideApp() {
       {account ? (
         <>
           <span>Signed in as <a href={explorerAccount(account)} target="_blank" rel="noreferrer"><strong>{account}</strong></a></span>
+          {isMainnetAccount(account) && (
+            <div className="warn">
+              <p><strong>{account} is a mainnet account.</strong> Uprali records on NEAR testnet, where this account doesn&apos;t exist, so recording would fail. Sign out and use a free .testnet account:</p>
+              <TestnetSteps />
+            </div>
+          )}
           <div className="row">
             <button className="btn small" onClick={async () => { if (wallet) await signOut(wallet); await endHistorySession(); setHistoryAccount(null); }}>Sign out</button>
             {historyAccount !== account && (
@@ -426,7 +452,6 @@ export function DecideApp() {
         <nav className="side-links">
           <a href="/history">History</a>
           <a href="/verify">Verify a decision</a>
-          <a href="/sample">Verified sample</a>
         </nav>
         {whoBox}
       </aside>
@@ -460,7 +485,7 @@ export function DecideApp() {
                       </p>
                       <PrivateAiBadge memo={result.memo} />
                       {caseMemo ? <CaseMemoView memo={caseMemo} tabs={false} /> : <MemoView memo={result.memo as Memo} />}
-                      <p className="row"><ReadAloud text={result.memo.spoken30s} /></p>
+                      {VOICE_ON && <p className="row"><ReadAloud text={result.memo.spoken30s} /></p>}
                       <div className="proof">
                         <h3>Proof on NEAR</h3>
                         <p className="small">
@@ -475,8 +500,9 @@ export function DecideApp() {
                               ✓ Recorded on {recorded.network} by <strong>{recorded.by}</strong>.
                             </p>
                             <p className="row">
-                              {recorded.txUrl && <a href={recorded.txUrl} target="_blank" rel="noreferrer">See the transaction</a>}
-                              <a href={recorded.verifyUrl}>Verify this decision</a>
+                              {recorded.txUrl && <a href={recorded.txUrl} target="_blank" rel="noreferrer">See the transaction on the NEAR explorer</a>}
+                              {result.runId && <a href={`/history?id=${encodeURIComponent(result.runId)}`}>See it in History</a>}
+                              <a href={`/verify?hash=${result.fingerprint}`}>Verify this decision</a>
                               <button className="btn small" onClick={download}>Download snapshot</button>
                             </p>
                           </div>
