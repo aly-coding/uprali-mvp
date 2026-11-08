@@ -11,8 +11,9 @@ describe("health page", () => {
     expect(h.ok).toBe(false);
     expect(h.near.settings.NEAR_CONTRACT_ID).toBe(false);
     expect(h.other.settings.SLACK_SIGNING_SECRET).toBe(true);
-    expect(h.problems.join(" ")).toMatch(/NEAR_CONTRACT_ID isn't set/);
+    expect(h.problems.join(" ")).toMatch(/aren't on this deploy: .*NEAR_CONTRACT_ID/);
     expect(h.problems.join(" ")).toMatch(/No database/);
+    expect(h.near.missing).toContain("NEAR_PRIVATE_KEY");
     expect(h.database.kind).toBe("memory");
   });
 });

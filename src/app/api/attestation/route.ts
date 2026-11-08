@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { attestationUrl, checkNearAiReport, freshNonce } from "@/lib/attest";
+import { nearAiConfig } from "@/lib/engine/providers";
 import { allow, clientKey } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
@@ -12,15 +13,15 @@ export async function GET(req: Request) {
   if (!allow(`attest:${clientKey(req)}`, 10, 60_000)) {
     return NextResponse.json({ error: "Too many checks. Try again in a minute." }, { status: 429 });
   }
-  if (!process.env.NEARAI_API_KEY) {
+  const ai = nearAiConfig();
+  if (!ai.apiKey) {
     return NextResponse.json({ error: "NEAR AI isn't configured on this server, so there's nothing to attest." }, { status: 400 });
   }
-  const model = process.env.NEARAI_MODEL || "zai-org/GLM-5.1-FP8";
-  const base = process.env.NEARAI_BASE_URL || "https://cloud-api.near.ai/v1";
+  const { model, baseUrl: base } = ai;
   const nonce = freshNonce();
   try {
     const res = await fetch(attestationUrl(base, model, nonce), {
-      headers: { authorization: `Bearer ${process.env.NEARAI_API_KEY}`, accept: "application/json" },
+      headers: { authorization: `Bearer ${ai.apiKey}`, accept: "application/json" },
       cache: "no-store",
     });
     if (!res.ok) {

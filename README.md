@@ -241,14 +241,14 @@ You don't need to touch code. Each step is a few clicks; the terminal steps can 
    - The page then puts the contract on the ledger account and deletes its only key, so nobody can change it. It swaps the relayer's key for one that can only record decisions, with up to 1 NEAR of fees.
    - If it stops partway, press the button again; it picks up where it stopped.
    - **You should see** six lines to copy. Press **Copy all six**.
-5. **Vercel.** In the Vercel project, open **Settings → Environment Variables**, click into the first **Key** box and paste: Vercel splits the six lines into six rows (`NEAR_NETWORK`, `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `RECORD_ACCESS_CODE`, `UPRALI_API_KEYS`). Keep **Production** ticked and press **Save**. `NEARAI_API_KEY` from step 2 should already be there. `ANTHROPIC_API_KEY` is optional, so Claude can step in if NEAR AI is down.
+5. **Vercel.** In the Vercel project, open **Settings → Environment Variables**, click into the first **Key** box and paste: Vercel splits the six lines into six rows (`NEAR_NETWORK`, `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `RECORD_ACCESS_CODE`, `UPRALI_API_KEYS`). Under **Environments**, tick **Production** and **Preview**, then press **Save**. `NEARAI_API_KEY` from step 2 should already be there. `ANTHROPIC_API_KEY` is optional, so Claude can step in if NEAR AI is down.
 
    Then open **Deployments**, open the menu on the top one and press **Redeploy**. Back on `/setup`, press **I've saved them in Vercel**. Open the app: you should see **Sign in with NEAR wallet**, and `/api/config` should list `nearai` first.
 
    `RECORD_ACCESS_CODE` is the fallback for a live demo: if a wallet won't sign in, press **Continue in demo mode**, type that code next to **Record decision**, and the relayer records it on testnet. `UPRALI_API_KEYS` is the key agents use for `/mcp` and `/api/v1`.
 
    For engineers: `npm run contract:deploy` does the same from a terminal with your own testnet key.
-6. **Database for the history (3 minutes).** In the Vercel project, open the **Storage** tab, press **Create Database** (or **Browse Marketplace**), pick **Neon** (or **Supabase**) on the free plan, and connect it to this project for **Production**. Vercel adds the database address as an environment variable by itself. Then **Redeploy**. **You should see** on the **History** page: "Saved in this app's database." Nothing else to set: the app makes its own table.
+6. **Database for the history (3 minutes).** In the Vercel project, open the **Storage** tab, press **Create Database** (or **Browse Marketplace**), pick **Neon** (or **Supabase**) on the free plan, and connect it to this project for **Production** and **Preview**. Vercel adds the database address as an environment variable by itself. Then **Redeploy**. **You should see** on the **History** page: "Saved in this app's database." Nothing else to set: the app makes its own table.
 7. **Submit.** Post the demo video on X, then submit the repo, the live link and the post in the hackathon form before **Nov 14, 2026 at 23:59 UTC (3:59 PM Pacific)**.
 
 ## Environment variables
@@ -257,7 +257,7 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 | Variable | What it's for |
 |---|---|
-| `NEARAI_API_KEY`, `NEARAI_BASE_URL`, `NEARAI_MODEL` | Private inference on NEAR AI Cloud (default `zai-org/GLM-5.1-FP8`) |
+| `NEARAI_API_KEY`, `NEARAI_BASE_URL`, `NEARAI_MODEL` | Private inference on NEAR AI Cloud (default `z-ai/glm-5.3-flash`, which runs in NEAR AI's attested TEE) |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude fallback (default `claude-opus-5-5`, with Anthropic's server-side fallbacks on) |
 | `LLM_PROVIDER` | `demo` forces the built-in analyst; `anthropic` tries Claude first |
 | `UPRALI_API_KEYS` | Comma-separated API keys for `/mcp` and `/api/v1` |

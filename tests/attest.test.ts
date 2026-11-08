@@ -44,3 +44,12 @@ describe("NEAR AI attestation checks", () => {
     expect(checkNearAiReport({}, { model, nonce: freshNonce() }).verified).toBe(false);
   });
 });
+
+import { sameModel } from "@/lib/attest";
+describe("model names", () => {
+  it("treats NEAR AI's catalog id and Hugging Face id as the same model", () => {
+    expect(sameModel("zai-org/GLM-5.3-Flash", "z-ai/glm-5.3-flash")).toBe(true);
+    expect(sameModel("Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B")).toBe(true);
+    expect(sameModel("z-ai/glm-5.3", "z-ai/glm-5.3-flash")).toBe(false);
+  });
+});

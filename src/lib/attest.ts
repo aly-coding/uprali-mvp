@@ -71,11 +71,17 @@ export const NOT_CHECKED_HERE = [
   "That the compose hash matches NEAR AI's published build",
 ];
 
+/** NEAR AI names a model by its catalog id or its Hugging Face id (z-ai/glm-5.3-flash, zai-org/GLM-5.3-Flash). */
+export function sameModel(a: string, b: string): boolean {
+  const n = (x: string) => x.toLowerCase().split("/").pop()!.replace(/-fp8$/, "");
+  return a === b || n(a) === n(b);
+}
+
 function checkNode(m: ModelAttestation, model: string, nonce: string): AttestationCheck[] {
   const checks: AttestationCheck[] = [];
   checks.push({
     name: "Model matches",
-    ok: !m.model_name || m.model_name === model,
+    ok: !m.model_name || sameModel(m.model_name, model),
     detail: m.model_name ? `Report is for ${m.model_name}` : "Report doesn't name a model",
   });
   checks.push({

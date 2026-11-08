@@ -89,7 +89,10 @@ type Env = Record<string, string | undefined>;
 
 let cached: { key: string; ledger: Ledger } | null = null;
 
-export async function getLedger(env: Env = process.env): Promise<Ledger> {
+export async function getLedger(rawEnv: Env = process.env): Promise<Ledger> {
+  // Settings pasted into Vercel can carry a stray space or line break; NEAR rejects those.
+  const t = (v?: string) => v?.trim() || undefined;
+  const env: Env = { ...rawEnv, NEAR_CONTRACT_ID: t(rawEnv.NEAR_CONTRACT_ID), NEAR_ACCOUNT_ID: t(rawEnv.NEAR_ACCOUNT_ID), NEAR_PRIVATE_KEY: t(rawEnv.NEAR_PRIVATE_KEY), NEAR_RPC_URL: t(rawEnv.NEAR_RPC_URL), NEAR_NETWORK: t(rawEnv.NEAR_NETWORK) };
   const key = [env.NEAR_CONTRACT_ID, env.NEAR_ACCOUNT_ID, env.NEAR_RPC_URL, env.LOCAL_LEDGER_PATH].join("|");
   if (cached && cached.key === key) return cached.ledger;
   let ledger: Ledger;

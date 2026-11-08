@@ -36,8 +36,18 @@ export function slackEnabled(env: Env = process.env): boolean {
 }
 
 async function readSigned(req: Request, env: Env): Promise<URLSearchParams | Response> {
-  if (!slackEnabled(env)) return new Response("The Uprali Slack app isn't set up on this deploy.", { status: 404 });
   const body = await req.text();
+  if (!slackEnabled(env)) {
+    // Slack checks the events address when the manifest is saved. Echoing its challenge reveals
+    // nothing, and lets the manifest save before the signing secret is in Vercel.
+    try {
+      const p = JSON.parse(body) as { type?: string; challenge?: unknown };
+      if (p.type === "url_verification" && typeof p.challenge === "string" && p.challenge.length <= 200) return Response.json({ challenge: p.challenge });
+    } catch {
+      /* fall through */
+    }
+    return new Response("The Uprali Slack app isn't set up on this deploy: SLACK_SIGNING_SECRET isn't set.", { status: 404 });
+  }
   const ok = verifySlackSignature({
     secret: env.SLACK_SIGNING_SECRET,
     timestamp: req.headers.get("x-slack-request-timestamp"),
@@ -262,8 +272,18 @@ export function cleanMentionText(text: string): string {
 /** POST /api/slack/events: Slack's Events API, for app_mention and message.im. */
 export async function handleEvent(req: Request, deps: SlackDeps): Promise<Response> {
   const env = deps.env ?? process.env;
-  if (!slackEnabled(env)) return new Response("The Uprali Slack app isn't set up on this deploy.", { status: 404 });
   const body = await req.text();
+  if (!slackEnabled(env)) {
+    // Slack checks the events address when the manifest is saved. Echoing its challenge reveals
+    // nothing, and lets the manifest save before the signing secret is in Vercel.
+    try {
+      const p = JSON.parse(body) as { type?: string; challenge?: unknown };
+      if (p.type === "url_verification" && typeof p.challenge === "string" && p.challenge.length <= 200) return Response.json({ challenge: p.challenge });
+    } catch {
+      /* fall through */
+    }
+    return new Response("The Uprali Slack app isn't set up on this deploy: SLACK_SIGNING_SECRET isn't set.", { status: 404 });
+  }
   const ok = verifySlackSignature({
     secret: env.SLACK_SIGNING_SECRET,
     timestamp: req.headers.get("x-slack-request-timestamp"),

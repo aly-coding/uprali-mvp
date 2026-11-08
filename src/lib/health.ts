@@ -35,19 +35,67 @@ export async function health(env: Env = process.env) {
   const ledger = got.value;
   const onNear = ledger.network === "near-testnet";
   const probe = await timed(() => ledger.get("0".repeat(64)));
-  if (!onNear) problems.push("NEAR_CONTRACT_ID isn't set, so decisions go to the throwaway demo ledger and wallet sign-in is off. Add the lines from the /setup page in Vercel and redeploy.");
+  const ledgerNeeded = ["NEAR_NETWORK", "NEAR_CONTRACT_ID", "NEAR_ACCOUNT_ID", "NEAR_PRIVATE_KEY", "RECORD_ACCESS_CODE", "UPRALI_API_KEYS"];
+  const ledgerMissing = ledgerNeeded.filter((n) => !(env[n] && env[n]!.trim()));
+  const onVercel = env.VERCEL_ENV ? ` This deploy is ${env.VERCEL_ENV}, so the lines must be saved with ${env.VERCEL_ENV === "production" ? "Production" : env.VERCEL_ENV === "preview" ? "Preview" : "Development"} ticked.` : "";
+  if (!onNear) problems.push(`Wallet sign-in is off and decisions go to a throwaway demo ledger, because these settings aren't on this deploy: ${ledgerMissing.join(", ")}. Paste the six lines from the /setup page into Vercel with Production and Preview ticked, then redeploy.${onVercel}`);
+  else if (ledgerMissing.length) problems.push(`Some ledger settings are missing on this deploy: ${ledgerMissing.join(", ")}. Add them from the /setup page in Vercel and redeploy.`);
   else if (!probe.ok) problems.push("The NEAR ledger contract didn't answer. Check NEAR_CONTRACT_ID is the account the /setup page made, and NEAR_RPC_URL if you set one.");
   if (onNear && !(nearNames.NEAR_ACCOUNT_ID && nearNames.NEAR_PRIVATE_KEY)) problems.push("No relayer account (NEAR_ACCOUNT_ID and NEAR_PRIVATE_KEY): wallet users can still record, but Slack, the API and agents can't.");
 
   // NEAR AI
   const ai = nearAiConfig(env);
   const order = providerOrder(env);
-  let nearAi: { configured: boolean; model: string; reachable: boolean | null; status: number | null } = { configured: Boolean(ai.apiKey), model: ai.model, reachable: null, status: null };
-  if (ai.apiKey) {
-    const r = await timed(async () => (await fetch(`${ai.baseUrl}/models`, { headers: { authorization: `Bearer ${ai.apiKey}` }, cache: "no-store", signal: AbortSignal.timeout(8000) })).status);
-    nearAi = { ...nearAi, reachable: r.ok && r.value < 500, status: r.ok ? r.value : null };
-    if (!r.ok || r.value >= 400) problems.push(r.ok && (r.value === 401 || r.value === 403) ? "NEAR AI turned the key down (NEARAI_API_KEY). Make a new key in NEAR AI Cloud." : "NEAR AI Cloud didn't answer. Decisions fall back to Claude or the built-in analyst.");
-  } else problems.push("NEARAI_API_KEY isn't set, so the analysis doesn't run on NEAR AI's private inference.");
+  let baseHost: string | null = null;
+  try {
+    baseHost = new URL(ai.baseUrl).host;
+  } catch {
+    baseHost = null;
+  }
+  let nearAi: {
+    configured: boolean;
+    model: string;
+    baseHost: string | null;
+    customBaseUrl: boolean;
+    customModel: boolean;
+    reachable: boolean | null;
+    status: number | null;
+    error: string | null;
+    ms: number | null;
+    keyHasSpaces: boolean;
+  } = { keyHasSpaces: Boolean(env.NEARAI_API_KEY && env.NEARAI_API_KEY !== env.NEARAI_API_KEY.trim()), configured: Boolean(ai.apiKey), model: ai.model, baseHost, customBaseUrl: Boolean(env.NEARAI_BASE_URL?.trim()), customModel: Boolean(env.NEARAI_MODEL?.trim()), reachable: null, status: null, error: null, ms: null };
+  if (!ai.apiKey) problems.push("NEARAI_API_KEY isn't set, so the analysis doesn't run on NEAR AI's private inference.");
+  else if (!baseHost) problems.push("NEARAI_BASE_URL isn't a full web address. Delete it in Vercel (the default https://cloud-api.near.ai/v1 is right) and redeploy.");
+  else {
+    const t = Date.now();
+    try {
+      const res = await fetch(`${ai.baseUrl}/models`, { headers: { authorization: `Bearer ${ai.apiKey}` }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
+      nearAi = { ...nearAi, status: res.status, reachable: res.status < 500, ms: Date.now() - t };
+      if (res.status === 401 || res.status === 403) problems.push(`NEAR AI turned the key down (HTTP ${res.status}). Make a new key in NEAR AI Cloud, paste it into NEARAI_API_KEY with no spaces, and redeploy.`);
+      else if (res.status === 404) problems.push(`NEAR AI answered 404 at ${baseHost}. NEARAI_BASE_URL is probably wrong: delete it in Vercel so the default is used, and redeploy.`);
+      else if (res.status === 402 || res.status === 429) problems.push(`NEAR AI answered HTTP ${res.status}: the account is out of credit or over its limit. Top up in NEAR AI Cloud.`);
+      else if (res.status >= 400) problems.push(`NEAR AI answered HTTP ${res.status}. Decisions fall back to Claude or the built-in analyst.`);
+      else if (res.ok) {
+        const ids = await res
+          .json()
+          .then((d: { data?: Array<{ id?: string }> }) => (d.data ?? []).map((m) => m.id).filter(Boolean) as string[])
+          .catch(() => [] as string[]);
+        if (ids.length && !ids.includes(ai.model) && nearAi.customModel) problems.push(`NEAR AI doesn't list the model ${ai.model} by that name. Delete NEARAI_MODEL in Vercel to use the default, z-ai/glm-5.3-flash, and redeploy.`);
+      }
+    } catch (err) {
+      const e = err as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+      const code = e.cause?.code || e.name || "Error";
+      const detail = (e.cause?.message || e.message || "").replace(/(key|token|secret|password)[^\s]*/gi, "[hidden]").slice(0, 120);
+      nearAi = { ...nearAi, reachable: false, error: `${code}: ${detail}`.trim(), ms: Date.now() - t };
+      problems.push(
+        e.name === "TimeoutError" || code === "UND_ERR_CONNECT_TIMEOUT"
+          ? `NEAR AI Cloud didn't answer within 15 seconds (${baseHost}). It may be down; decisions fall back to Claude or the built-in analyst.`
+          : code === "ENOTFOUND"
+            ? `The NEAR AI address ${baseHost} doesn't exist. Delete NEARAI_BASE_URL in Vercel so the default is used, and redeploy.`
+            : `NEAR AI Cloud couldn't be reached (${code}). Decisions fall back to Claude or the built-in analyst.`,
+      );
+    }
+  }
 
   // Database for history
   const store = await getHistory(env);
@@ -61,6 +109,8 @@ export async function health(env: Env = process.env) {
     problems,
     near: {
       settings: nearNames,
+      missing: ledgerMissing,
+      deploy: env.VERCEL_ENV ?? null,
       network: ledger.network,
       contractId: ledger.contractId ?? null,
       relayerAccount: onNear && ledger.recorder !== "(read-only)" ? ledger.recorder : null,

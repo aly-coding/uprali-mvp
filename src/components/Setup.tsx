@@ -106,6 +106,7 @@ export default function Setup() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [missing, setMissing] = useState<{ names: string[]; deploy: string | null } | null>(null);
   const unsub = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -114,8 +115,9 @@ export default function Setup() {
     if (s) setOwnerInput(s.owner);
     fetch("/api/config")
       .then((r) => r.json())
-      .then(async (c: { wallet: { contractId: string } | null }) => {
+      .then(async (c: { wallet: { contractId: string } | null; ledgerMissing?: string[]; deploy?: string | null }) => {
         setConfigured(c.wallet?.contractId ?? null);
+        setMissing({ names: c.ledgerMissing ?? [], deploy: c.deploy ?? null });
         if (c.wallet) return;
         try {
           const w = await initWallet({ networkId: "testnet" });
@@ -285,6 +287,17 @@ export default function Setup() {
         <h1>Set up the NEAR testnet ledger</h1>
         <p className="muted">One time, about two minutes. You don&apos;t need any testnet NEAR: NEAR&apos;s faucet creates and funds the two accounts. Nothing here touches mainnet or real money.</p>
 
+        {missing && missing.names.length > 0 && (
+          <div className="warn">
+            <p>
+              <strong>This {missing.deploy ? `${missing.deploy} ` : ""}deploy doesn&apos;t have these settings yet:</strong> {missing.names.join(", ")}.
+            </p>
+            <p>
+              If you already pasted them in Vercel, open each one there and check that <strong>Production</strong> (and <strong>Preview</strong>) is ticked, that it&apos;s the project this site runs on, and then press <strong>Redeploy</strong>. A setting only reaches the site after a redeploy. If you no longer have the six lines, press <strong>Start over with new accounts</strong> below, or run the steps again.
+            </p>
+          </div>
+        )}
+
         <h2>1. Who owns the ledger</h2>
         {account ? (
           <p>Signed in as <strong>{account}</strong>. {!ready && wallet && <button className="btn small" onClick={() => signOut(wallet)}>Use another account</button>}</p>
@@ -329,7 +342,7 @@ export default function Setup() {
             <p><button className="btn primary" onClick={copyAll}>{copied ? "Copied" : "Copy all six"}</button></p>
             <ol>
               <li>In Vercel, open the project, then <strong>Settings</strong>, then <strong>Environment Variables</strong>.</li>
-              <li>Click into the first <strong>Key</strong> box and paste. Vercel splits the six lines into six rows. Keep <strong>Production</strong> ticked and press <strong>Save</strong>.</li>
+              <li>Click into the first <strong>Key</strong> box and paste. Vercel splits the six lines into six rows. Under <strong>Environments</strong>, tick <strong>Production</strong> and <strong>Preview</strong> (Development is optional), then press <strong>Save</strong>.</li>
               <li>Open <strong>Deployments</strong>, open the menu on the top one and press <strong>Redeploy</strong>.</li>
               <li>Write down the access code <strong>{saved.accessCode}</strong>. It lets you record a decision in the demo without a wallet.</li>
             </ol>

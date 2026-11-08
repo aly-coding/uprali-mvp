@@ -16,5 +16,8 @@ export async function GET() {
     wallet: ledger.network === "near-testnet" && ledger.contractId ? { networkId: "testnet", contractId: ledger.contractId } : null,
     apiKeyRequired: authRequired(),
     relayerCodeEnabled: Boolean(process.env.RECORD_ACCESS_CODE),
+    // Setting names only (never values), so /setup can say what this deploy is missing.
+    ledgerMissing: ["NEAR_NETWORK", "NEAR_CONTRACT_ID", "NEAR_ACCOUNT_ID", "NEAR_PRIVATE_KEY", "RECORD_ACCESS_CODE", "UPRALI_API_KEYS"].filter((n) => !process.env[n]?.trim()),
+    deploy: process.env.VERCEL_ENV ?? null,
   });
 }

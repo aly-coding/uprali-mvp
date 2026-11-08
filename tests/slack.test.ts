@@ -278,6 +278,14 @@ describe("@uprali-mvp mentions and direct messages", () => {
     expect((await handleEvent(forged, h.deps)).status).toBe(401);
   });
 
+  it("answers the URL check before the signing secret is set, and nothing else", async () => {
+    const env = { ...process.env, SLACK_SIGNING_SECRET: "" };
+    const deps: SlackDeps = { env, base: "https://uprali.example", defer: () => undefined, fetch: fetch };
+    const post = (b: unknown) => new Request("http://localhost/api/slack/events", { method: "POST", body: JSON.stringify(b) });
+    expect(await (await handleEvent(post({ type: "url_verification", challenge: "xyz" }), deps)).json()).toEqual({ challenge: "xyz" });
+    expect((await handleEvent(post({ type: "event_callback", event: { type: "app_mention" } }), deps)).status).toBe(404);
+  });
+
   it("answers a mention in a thread: working first, then the decision with buttons, saved to history", async () => {
     const h = eventHarness();
     const r = await handleEvent(event({ type: "event_callback", team_id: "T9", event_id: "Ev1", event: { type: "app_mention", user: "U1", text: `<@U0BOT> ${QUESTION}`, channel: "C1", ts: "1699999999.000100" } }), h.deps);
