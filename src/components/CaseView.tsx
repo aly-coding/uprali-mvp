@@ -110,8 +110,9 @@ function RowsTable({ rows, label }: { rows: ModelRow[]; label: string }) {
   );
 }
 
-type Tab = "model" | "unit" | "pnl" | "scenarios";
-const TABS: Array<{ id: Tab; label: string }> = [
+export type CaseTab = "model" | "unit" | "pnl" | "scenarios";
+type Tab = CaseTab;
+export const CASE_TABS: Array<{ id: Tab; label: string }> = [
   { id: "model", label: "Model" },
   { id: "unit", label: "Unit Economics" },
   { id: "pnl", label: "Summary P&L" },
@@ -121,7 +122,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
 const VERDICT: Record<string, string> = { go: "go", pilot: "pilot", no_go: "no_go" };
 
 /** The business-case memo: the call, the owner cards, the model in four tabs and every number's source. */
-export function CaseMemoView({ memo }: { memo: CaseMemo }) {
+export function CaseMemoView({ memo, tabs = true }: { memo: CaseMemo; tabs?: boolean }) {
   const [tab, setTab] = useState<Tab>("model");
   const m = memo.metrics;
   const capacity = memo.capacityByYear ? memo.capacityByYear.reduce((a, b) => a + b, 0) : null;
@@ -160,39 +161,15 @@ export function CaseMemoView({ memo }: { memo: CaseMemo }) {
         ))}
       </div>
 
-      {m && (
+      {m && tabs && (
         <>
           <div className="tabs" role="tablist">
-            {TABS.map((t) => (
+            {CASE_TABS.map((t) => (
               <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>{t.label}</button>
             ))}
           </div>
           <div role="tabpanel">
-            {tab === "model" && <RowsTable rows={memo.model} label="Model" />}
-            {tab === "unit" && <RowsTable rows={memo.unitEconomics} label="Unit economics" />}
-            {tab === "pnl" && <RowsTable rows={memo.pnl} label="Summary P&L" />}
-            {tab === "scenarios" && (
-              <>
-                <div className="table-wrap">
-                  <table className="model">
-                    <thead><tr><th /><th>Net cash, 3 years</th><th>Net present value</th><th>ROI</th><th>Payback</th>{capacity !== null && <th>Freed-up time</th>}</tr></thead>
-                    <tbody>
-                      {memo.scenarios.map((s) => (
-                        <tr key={s.id} className={s.id === "base" ? "total" : ""}>
-                          <th>{s.label}</th>
-                          <td className={s.metrics.cumulativeNet < 0 ? "neg" : ""}>{usd(s.metrics.cumulativeNet)}</td>
-                          <td className={s.metrics.npv < 0 ? "neg" : ""}>{usd(s.metrics.npv)}</td>
-                          <td>{s.metrics.roi === null ? "—" : `${Math.round(s.metrics.roi * 1000) / 10}%`}</td>
-                          <td>{s.metrics.paybackMonths === null ? "Not in 3 yrs" : `${s.metrics.paybackMonths} mo`}</td>
-                          {capacity !== null && <td>{usd(s.capacity ?? 0)}</td>}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="muted small">{memo.scenarios[0]?.flex}. Assumptions stay as they are.</p>
-              </>
-            )}
+            <CaseTable memo={memo} tab={tab} />
           </div>
         </>
       )}
@@ -232,5 +209,40 @@ export function CaseMemoView({ memo }: { memo: CaseMemo }) {
         </div>
       </details>
     </div>
+  );
+}
+
+/** One of the model tabs: Model, Unit Economics, Summary P&L or Scenarios. */
+export function CaseTable({ memo, tab }: { memo: CaseMemo; tab: CaseTab }) {
+  const capacity = memo.capacityByYear ? memo.capacityByYear.reduce((a, b) => a + b, 0) : null;
+  if (!memo.metrics) return <p className="muted">The model fills in once the numbers only a person can give are in.</p>;
+  return (
+    <>
+  {tab === "model" && <RowsTable rows={memo.model} label="Model" />}
+  {tab === "unit" && <RowsTable rows={memo.unitEconomics} label="Unit economics" />}
+  {tab === "pnl" && <RowsTable rows={memo.pnl} label="Summary P&L" />}
+  {tab === "scenarios" && (
+    <>
+      <div className="table-wrap">
+        <table className="model">
+          <thead><tr><th /><th>Net cash, 3 years</th><th>Net present value</th><th>ROI</th><th>Payback</th>{capacity !== null && <th>Freed-up time</th>}</tr></thead>
+          <tbody>
+            {memo.scenarios.map((s) => (
+              <tr key={s.id} className={s.id === "base" ? "total" : ""}>
+                <th>{s.label}</th>
+                <td className={s.metrics.cumulativeNet < 0 ? "neg" : ""}>{usd(s.metrics.cumulativeNet)}</td>
+                <td className={s.metrics.npv < 0 ? "neg" : ""}>{usd(s.metrics.npv)}</td>
+                <td>{s.metrics.roi === null ? "—" : `${Math.round(s.metrics.roi * 1000) / 10}%`}</td>
+                <td>{s.metrics.paybackMonths === null ? "Not in 3 yrs" : `${s.metrics.paybackMonths} mo`}</td>
+                {capacity !== null && <td>{usd(s.capacity ?? 0)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small">{memo.scenarios[0]?.flex}. Assumptions stay as they are.</p>
+    </>
+  )}
+    </>
   );
 }

@@ -7,7 +7,7 @@ import { canonicalJson, sha256Hex, type DecisionSnapshot } from "@/lib/engine/sn
 import type { Memo } from "@/lib/engine/types";
 import type { CaseMemo } from "@/lib/engine/caseDecide";
 import { CASE_TEMPLATES, isCaseTemplate, type TemplateId } from "@/lib/engine/cases";
-import { CaseForm, CaseMemoView, TemplatePicker } from "./CaseView";
+import { CASE_TABS, CaseForm, CaseMemoView, CaseTable, TemplatePicker, templateTitle, type CaseTab } from "./CaseView";
 import { MemoView, PrivateAiBadge } from "./MemoView";
 import { Advisor } from "./Advisor";
 import { MicButton, ReadAloud, appendSpoken } from "./Voice";
@@ -60,6 +60,9 @@ export function DecideApp() {
   const [account, setAccount] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
   const [template, setTemplate] = useState<TemplateId>("build_vs_buy");
+  /** What was asked for the result on screen, shown as the person's message. */
+  const [asked, setAsked] = useState("");
+  const [panelTab, setPanelTab] = useState<"inputs" | CaseTab>("inputs");
   const [question, setQuestion] = useState(EXAMPLE);
   const [values, setValues] = useState<Record<string, string>>({});
   const [more, setMore] = useState(false);
@@ -154,6 +157,19 @@ export function DecideApp() {
     setParent(null);
     setMore(false);
     setError("");
+    setPanelTab("inputs");
+  }
+
+  function newCase() {
+    setResult(null);
+    setRecorded(null);
+    setParent(null);
+    setValues({});
+    setSuggested({});
+    setAsked("");
+    setPanelTab("inputs");
+    setError("");
+    setQuestion("");
   }
 
   async function run() {
@@ -161,6 +177,7 @@ export function DecideApp() {
     setError("");
     setResult(null);
     setRecorded(null);
+    setAsked(question.trim() || `${templateTitle(template)} with the numbers on the right`);
     const inputs: Record<string, unknown> = {};
     for (const [k, raw] of Object.entries(values)) {
       const v = raw.trim();
@@ -185,6 +202,7 @@ export function DecideApp() {
       if (local !== data.fingerprint) throw new Error("The fingerprint didn't match the snapshot. Not recording this.");
       saveSnapshotLocally(data.fingerprint, data.snapshot);
       setResult(data);
+      if (data.memo.schema === "uprali.case.v1" && data.memo.metrics) setPanelTab("model");
       if (parent && data.parentId) setParent({ ...parent, version: data.snapshot.version });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -247,12 +265,15 @@ export function DecideApp() {
   if (!who) {
     return (
       <main className="page narrow">
-        <section className="card signin">
-          <h1>Build or buy, decided in a minute</h1>
+        <section className="card signin hero">
+          <span className="ai-mark big" aria-hidden>U</span>
+          <h1>What business decision are you trying to make?</h1>
           <p>
-            Uprali works out what it really costs to build a tool in-house versus keep paying for one. Every number shows where it came from and
-            whether a person or an agent stands behind it. The model runs privately on NEAR AI Cloud, and the decision's fingerprint goes on NEAR.
+            Uprali is a private AI financial analyst. Pick a template (build or buy, launch a product or a feature, expand into a new market, or invest in AI)
+            and it builds a three-year business case where every number shows where it came from and who stands behind it. The model runs privately on NEAR AI
+            Cloud, and the decision&apos;s fingerprint goes on NEAR.
           </p>
+          <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
           {config.wallet ? (
             <button className="btn primary big" onClick={() => wallet?.modal.show()} disabled={!wallet}>
               Sign in with NEAR wallet
@@ -268,12 +289,16 @@ export function DecideApp() {
     );
   }
 
-  return (
-    <main className="page">
-      <div className="who">
-        {account ? (
-          <>
-            Signed in as <a href={explorerAccount(account)} target="_blank" rel="noreferrer"><strong>{account}</strong></a>
+  const isCase = isCaseTemplate(template);
+  const caseMemo = result && result.memo.schema === "uprali.case.v1" ? result.memo : null;
+  const canRun = busy === "" && (question.trim().length >= 5 || Object.values(values).some((v) => v.trim()));
+
+  const whoBox = (
+    <div className="side-who small">
+      {account ? (
+        <>
+          <span>Signed in as <a href={explorerAccount(account)} target="_blank" rel="noreferrer"><strong>{account}</strong></a></span>
+          <div className="row">
             <button className="btn small" onClick={async () => { if (wallet) await signOut(wallet); await endHistorySession(); setHistoryAccount(null); }}>Sign out</button>
             {historyAccount !== account && (
               <button
@@ -293,133 +318,209 @@ export function DecideApp() {
                 Keep history under {account}
               </button>
             )}
-          </>
-        ) : (
-          <>Demo mode <span className="muted">
+          </div>
+        </>
+      ) : (
+        <>
+          <span><strong>Demo mode</strong></span>
+          <span className="muted">
             {config.wallet
               ? config.relayerCodeEnabled
-                ? "(recording on NEAR testnet needs a wallet sign-in or the access code)"
-                : "(sign in with a NEAR wallet to record on testnet)"
-              : "(decisions are recorded on the local demo ledger)"}
+                ? "Recording on NEAR testnet needs a wallet sign-in or the access code."
+                : "Sign in with a NEAR wallet to record on testnet."
+              : "Decisions are recorded on the local demo ledger."}
           </span>
-            {config.wallet && <button className="btn small" onClick={() => wallet?.modal.show()}>Sign in with NEAR wallet</button>}
+          {config.wallet && <button className="btn small" onClick={() => wallet?.modal.show()}>Sign in with NEAR wallet</button>}
+        </>
+      )}
+    </div>
+  );
+
+  const composer = (
+    <div className={`composer ${result || busy ? "docked" : ""}`}>
+      {parent && (
+        <p className="small">
+          Re-running <strong>{parent.title}</strong>. The result is saved as a new version; <a href={`/history?id=${encodeURIComponent(parent.id)}`}>the earlier one</a> stays as it was.
+        </p>
+      )}
+      <textarea
+        className="input"
+        rows={result ? 2 : 4}
+        value={question}
+        placeholder="Describe the decision in plain words, with any numbers you know…"
+        onChange={(e) => setQuestion(e.target.value)}
+        aria-label="The decision"
+      />
+      <div className="composer-bar">
+        <MicButton label="Speak" onText={(t) => setQuestion((q) => appendSpoken(q, t))} />
+        <span className="chip" title="Change it in Templates">{templateTitle(template)}</span>
+        <span className="grow" />
+        <button className="btn primary" onClick={run} disabled={!canRun}>
+          {busy === "deciding" ? "Working it out…" : result ? "Run again" : isCase ? "Build the case" : "Run the decision"}
+        </button>
+      </div>
+    </div>
+  );
+
+  const inputsPanel = (
+    <div className="panel-inputs">
+      <p className="muted small">
+        {isCase
+          ? "Each card belongs to the person who should stand behind its numbers. Numbers you type win over the text and count as yours; blanks use the labelled benchmark."
+          : "Numbers you type win over the text and count as yours. Blanks use a labelled benchmark or are marked for a person to fill in."}
+      </p>
+      {isCase ? (
+        <CaseForm template={template} values={values} more={more} onChange={(k, v) => setValues({ ...values, [k]: v })} />
+      ) : (
+        <>
+          <Advisor question={question} onCompare={compare} />
+          {groups.map(({ g, fields }) => (
+            <fieldset key={g} className={`group ${g}`}>
+              <legend>{groupInfo(g).title}</legend>
+              <p className="muted small">{groupInfo(g).blurb}</p>
+              <div className="fields">
+                {fields.map((f) => (
+                  <label key={f.key}>
+                    <span>
+                      {f.label}
+                      {suggested[f.key] && <span className="badge suggest">Suggestion, verify</span>}
+                    </span>
+                    <input
+                      className="input"
+                      placeholder={typeof f.benchmark === "number" ? `benchmark ${f.benchmark}` : f.unit === "text" ? "" : "unknown"}
+                      value={values[f.key] ?? ""}
+                      onChange={(e) => {
+                        setValues({ ...values, [f.key]: e.target.value });
+                        if (suggested[f.key]) {
+                          const rest = { ...suggested };
+                          delete rest[f.key];
+                          setSuggested(rest);
+                        }
+                      }}
+                      title={f.ask}
+                    />
+                    {f.help && <small className="help">{f.help}</small>}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+        </>
+      )}
+      <button className="link" onClick={() => setMore(!more)}>
+        {more ? "Fewer numbers" : isCase ? "All assumptions (churn, costs, discount rate…)" : "More numbers (upkeep, security, on-call, turnover…)"}
+      </button>
+      <button className="btn primary" onClick={run} disabled={!canRun}>
+        {busy === "deciding" ? "Working it out…" : result ? "Run again with these numbers" : "Run with these numbers"}
+      </button>
+    </div>
+  );
+
+  return (
+    <main className="workspace">
+      <aside className="sidebar">
+        <button className="btn primary block" onClick={newCase}>+ New case</button>
+        <p className="side-label">Templates</p>
+        <TemplatePicker value={template} onPick={pick} compact />
+        <p className="side-label">Your work</p>
+        <nav className="side-links">
+          <a href="/history">History</a>
+          <a href="/verify">Verify a decision</a>
+          <a href="/sample">Verified sample</a>
+        </nav>
+        {whoBox}
+      </aside>
+
+      <section className="conversation">
+        {!result && busy !== "deciding" ? (
+          <div className="empty">
+            <h1>What business decision are you trying to make?</h1>
+            <p className="muted">Write a prompt or choose a starting template. Uprali turns it into a three-year, driver-based business case with an owner for every number.</p>
+            {composer}
+            <TemplatePicker value={template} onPick={pick} />
+            {error && <p className="error">{error}</p>}
+          </div>
+        ) : (
+          <>
+            <div className="thread">
+              <div className="msg user"><p>{asked}</p></div>
+              <div className="msg ai">
+                <span className="ai-mark" aria-hidden>U</span>
+                <div className="msg-body">
+                  {busy === "deciding" && !result ? (
+                    <p className="shimmer">Reading the request and working out the numbers…</p>
+                  ) : result ? (
+                    <>
+                      <p className="muted small">
+                        {result.runId ? (
+                          <>Saved to <a href={`/history?id=${encodeURIComponent(result.runId)}`}>your history</a>{result.snapshot.version > 1 ? ` as version ${result.snapshot.version}` : ""}.</>
+                        ) : (
+                          "Couldn't save this run to your history."
+                        )}
+                      </p>
+                      <PrivateAiBadge memo={result.memo} />
+                      {caseMemo ? <CaseMemoView memo={caseMemo} tabs={false} /> : <MemoView memo={result.memo as Memo} />}
+                      <p className="row"><ReadAloud text={result.memo.spoken30s} /></p>
+                      <div className="proof">
+                        <h3>Proof on NEAR</h3>
+                        <p className="small">
+                          Fingerprint <code>{result.fingerprint}</code>
+                        </p>
+                        <p className="muted small">
+                          Only this fingerprint, the decision id and version go on chain. The numbers and the question never leave this page and the server&apos;s memory.
+                        </p>
+                        {recorded ? (
+                          <div className="recorded">
+                            <p>
+                              ✓ Recorded on {recorded.network} by <strong>{recorded.by}</strong>.
+                            </p>
+                            <p className="row">
+                              {recorded.txUrl && <a href={recorded.txUrl} target="_blank" rel="noreferrer">See the transaction</a>}
+                              <a href={recorded.verifyUrl}>Verify this decision</a>
+                              <button className="btn small" onClick={download}>Download snapshot</button>
+                            </p>
+                          </div>
+                        ) : result.memo.status === "needs_human" ? (
+                          <p className="muted">Fill in the numbers marked &quot;Needs a human&quot; before recording.</p>
+                        ) : (
+                          <div className="row">
+                            {!account && config.wallet && config.relayerCodeEnabled && (
+                              <input className="input code" placeholder="Demo access code" value={code} onChange={(e) => setCode(e.target.value)} />
+                            )}
+                            <button className="btn primary" onClick={record} disabled={busy !== ""}>
+                              {busy === "recording" ? "Recording…" : account ? `Sign and record as ${account}` : "Record decision"}
+                            </button>
+                            <button className="btn" onClick={download}>Download snapshot</button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            {error && <p className="error">{error}</p>}
+            {composer}
           </>
         )}
-      </div>
+      </section>
 
-      <div className="layout">
-        <section className="card ask">
-          <h2>The decision</h2>
-          <TemplatePicker value={template} onPick={pick} compact />
-          {parent && (
-            <p className="small">
-              Re-running <strong>{parent.title}</strong>. The result is saved as a new version; <a href={`/history?id=${encodeURIComponent(parent.id)}`}>the earlier one</a> stays as it was.
-            </p>
-          )}
-          <textarea className="input" rows={5} value={question} onChange={(e) => setQuestion(e.target.value)} />
-          <div className="row">
-            <MicButton label="Say the decision" onText={(t) => setQuestion((q) => appendSpoken(q, t))} />
-            <span className="muted small">Say or type what you know in plain words. Numbers you type below win over the text, and count as yours.</span>
-          </div>
-          {isCaseTemplate(template) ? (
-            <CaseForm template={template} values={values} more={more} onChange={(k, v) => setValues({ ...values, [k]: v })} />
-          ) : (
-            <>
-            <Advisor question={question} onCompare={compare} />
-            {groups.map(({ g, fields }) => (
-              <fieldset key={g} className={`group ${g}`}>
-                <legend>{groupInfo(g).title}</legend>
-                <p className="muted small">{groupInfo(g).blurb}</p>
-                <div className="fields">
-                  {fields.map((f) => (
-                    <label key={f.key}>
-                      <span>
-                        {f.label}
-                        {suggested[f.key] && <span className="badge suggest">Suggestion, verify</span>}
-                      </span>
-                      <input
-                        className="input"
-                        placeholder={typeof f.benchmark === "number" ? `benchmark ${f.benchmark}` : f.unit === "text" ? "" : "unknown"}
-                        value={values[f.key] ?? ""}
-                        onChange={(e) => {
-                          setValues({ ...values, [f.key]: e.target.value });
-                          if (suggested[f.key]) {
-                            const rest = { ...suggested };
-                            delete rest[f.key];
-                            setSuggested(rest);
-                          }
-                        }}
-                        title={f.ask}
-                      />
-                      {f.help && <small className="help">{f.help}</small>}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+      <aside className="panel">
+        <div className="tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={panelTab === "inputs"} className={panelTab === "inputs" ? "on" : ""} onClick={() => setPanelTab("inputs")}>
+            {isCase ? "Assumptions" : "Numbers"}
+          </button>
+          {isCase &&
+            CASE_TABS.map((t) => (
+              <button key={t.id} type="button" role="tab" aria-selected={panelTab === t.id} className={panelTab === t.id ? "on" : ""} onClick={() => setPanelTab(t.id)} disabled={!caseMemo}>
+                {t.label}
+              </button>
             ))}
-            </>
-          )}
-          <button className="link" onClick={() => setMore(!more)}>
-            {more ? "Fewer numbers" : isCaseTemplate(template) ? "All assumptions (churn, costs, discount rate…)" : "More numbers (upkeep, security, on-call, turnover…)"}
-          </button>
-          <button className="btn primary big" onClick={run} disabled={busy !== "" || question.trim().length < 5}>
-            {busy === "deciding" ? "Working it out…" : "Run the decision"}
-          </button>
-          {error && <p className="error">{error}</p>}
-        </section>
-
-        <section className="card result">
-          {!result ? (
-            <p className="muted">The memo appears here: the recommendation, the three-year numbers, and every number with its source and owner.</p>
-          ) : (
-            <>
-              <p className="muted small">
-                {result.runId ? (
-                  <>Saved to <a href={`/history?id=${encodeURIComponent(result.runId)}`}>your history</a>{result.snapshot.version > 1 ? ` as version ${result.snapshot.version}` : ""}.</>
-                ) : (
-                  "Couldn't save this run to your history."
-                )}
-              </p>
-              <PrivateAiBadge memo={result.memo} />
-              {result.memo.schema === "uprali.case.v1" ? <CaseMemoView memo={result.memo} /> : <MemoView memo={result.memo} />}
-              <p className="row"><ReadAloud text={result.memo.spoken30s} /></p>
-              <div className="proof">
-                <h3>Proof on NEAR</h3>
-                <p className="small">
-                  Fingerprint <code>{result.fingerprint}</code>
-                </p>
-                <p className="muted small">
-                  Only this fingerprint, the decision id and version go on chain. The numbers and the question never leave this page and the server's memory.
-                </p>
-                {recorded ? (
-                  <div className="recorded">
-                    <p>
-                      ✓ Recorded on {recorded.network} by <strong>{recorded.by}</strong>.
-                    </p>
-                    <p className="row">
-                      {recorded.txUrl && <a href={recorded.txUrl} target="_blank" rel="noreferrer">See the transaction</a>}
-                      <a href={recorded.verifyUrl}>Verify this decision</a>
-                      <button className="btn small" onClick={download}>Download snapshot</button>
-                    </p>
-                  </div>
-                ) : result.memo.status === "needs_human" ? (
-                  <p className="muted">Fill in the numbers marked "Needs a human" before recording.</p>
-                ) : (
-                  <div className="row">
-                    {!account && config.wallet && config.relayerCodeEnabled && (
-                      <input className="input code" placeholder="Demo access code" value={code} onChange={(e) => setCode(e.target.value)} />
-                    )}
-                    <button className="btn primary" onClick={record} disabled={busy !== ""}>
-                      {busy === "recording" ? "Recording…" : account ? `Sign and record as ${account}` : "Record decision"}
-                    </button>
-                    <button className="btn" onClick={download}>Download snapshot</button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </section>
-      </div>
+        </div>
+        <div role="tabpanel" className="panel-body">
+          {panelTab === "inputs" || !caseMemo ? inputsPanel : <CaseTable memo={caseMemo} tab={panelTab} />}
+        </div>
+      </aside>
     </main>
   );
 }
