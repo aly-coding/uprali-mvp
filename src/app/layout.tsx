@@ -18,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </a>
           <nav>
             <a href="/">Decide</a>
+            <a href="/history">History</a>
             <a href="/verify">Verify a decision</a>
             <a href="/slack">Slack</a>
             <a href="https://github.com/aly-coding/uprali-mvp" target="_blank" rel="noreferrer">GitHub</a>

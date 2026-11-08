@@ -174,6 +174,7 @@ export function helpMessage() {
       "Ask Uprali a build or buy question, with any numbers you know. For example:\n" +
       "`/uprali Should we build our own CRM or keep paying $720 a year for HubSpot? Our engineer built a prototype in 3 weeks.`\n" +
       "Uprali replies in the channel with the 3-year cost of each side, where every number came from, and the numbers only a person can give. " +
-      "Anyone can fill those in, approve, and record the decision's fingerprint on NEAR testnet.",
+      "Anyone can fill those in, approve, and record the decision's fingerprint on NEAR testnet.\n" +
+      "`/uprali history` shows your last 10 decisions, only to you.",
   };
 }

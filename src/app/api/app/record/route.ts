@@ -1,4 +1,5 @@
 import { validateSnapshot } from "@/lib/engine/snapshot";
+import { markRecordedQuietly, recordedFrom } from "@/lib/history";
 import { getLedger } from "@/lib/ledger";
 import { allow, clientKey } from "@/lib/ratelimit";
 import { errorResponse, publicBaseUrl, recordSnapshot, verifyUrl } from "@/lib/service";
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
   }
   try {
     const recorded = await recordSnapshot(body.snapshot);
+    await markRecordedQuietly(recorded.anchor.hash, recordedFrom(recorded));
     return Response.json({ ...recorded, verifyUrl: verifyUrl(publicBaseUrl(req), recorded.anchor.hash) });
   } catch (err) {
     return errorResponse(err);

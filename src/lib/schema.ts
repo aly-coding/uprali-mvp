@@ -28,6 +28,8 @@ export const buildVsBuyBody = z.object({
   record: z.boolean().optional(),
   approved_by: z.array(z.string().max(120)).max(10).optional(),
   decided_by: z.string().max(120).optional(),
+  /** Re-run an earlier run from your history with changed numbers: it becomes the next version. */
+  parent_id: z.string().max(64).optional(),
 });
 
 export type BuildVsBuyBody = z.infer<typeof buildVsBuyBody>;

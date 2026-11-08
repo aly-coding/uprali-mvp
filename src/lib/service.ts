@@ -2,6 +2,7 @@ import { decide, type DecideRequest } from "./engine/decide";
 import { memoToMarkdown } from "./engine/markdown";
 import { buildSnapshot, hashSnapshot, validateSnapshot, type DecisionSnapshot } from "./engine/snapshot";
 import type { Memo } from "./engine/types";
+import { getHistory, makeEntry, recordedFrom, saveQuietly, type HistorySource } from "./history";
 import { getLedger, LedgerError, type LedgerAnchor, type RecordResult } from "./ledger";
 
 type Env = Record<string, string | undefined>;
@@ -28,12 +29,12 @@ export interface DecisionResult {
 }
 
 export async function runDecision(
-  req: DecideRequest & { decidedBy: string; approvedBy?: string[]; record?: boolean },
+  req: DecideRequest & { decidedBy: string; approvedBy?: string[]; record?: boolean; version?: number },
   base: string,
   env: Env = process.env,
 ): Promise<DecisionResult> {
   const memo = await decide(req, env);
-  const snapshot = buildSnapshot(memo, { decidedBy: req.decidedBy, approvers: req.approvedBy });
+  const snapshot = buildSnapshot(memo, { decidedBy: req.decidedBy, approvers: req.approvedBy, version: req.version });
   const fingerprint = await hashSnapshot(snapshot);
   let recorded: RecordResult | null = null;
   let recordError: string | null = null;
@@ -57,6 +58,60 @@ export async function runDecision(
     recordError,
     markdown: memoToMarkdown(memo, { fingerprint, verifyUrl: url, txUrl: recorded?.explorerUrl }),
   };
+}
+
+export interface HistoryTarget {
+  owner: string | null;
+  source: HistorySource;
+  /** Re-run of this earlier run: the new run keeps its decision id and takes the next version. */
+  parentId?: string | null;
+  /** Fixed run id, so later updates replace the same run (used by Slack). */
+  runId?: string;
+}
+
+/**
+ * Runs a decision and keeps it in the owner's history. A parent run that isn't the owner's is
+ * ignored, so nobody can attach a run to someone else's decision.
+ */
+export async function runAndSave(
+  req: DecideRequest & { decidedBy: string; approvedBy?: string[]; record?: boolean },
+  base: string,
+  target: HistoryTarget,
+  env: Env = process.env,
+): Promise<DecisionResult & { runId: string | null; parentId: string | null }> {
+  let parentId: string | null = null;
+  let version: number | undefined;
+  let decisionId = req.decisionId;
+  if (target.owner && target.parentId) {
+    try {
+      const store = await getHistory(env);
+      const parent = await store.get(target.owner, target.parentId);
+      if (parent) {
+        parentId = parent.id;
+        decisionId = parent.decisionId;
+        version = await store.nextVersion(target.owner, parent.decisionId);
+      }
+    } catch {
+      /* history down: run it as a new decision */
+    }
+  }
+  const r = await runDecision({ ...req, decisionId, version }, base, env);
+  if (!target.owner) return { ...r, runId: null, parentId };
+  const entry = makeEntry({
+    id: target.runId,
+    owner: target.owner,
+    source: target.source,
+    parentId,
+    inputs: req.inputs ?? {},
+    memo: r.memo,
+    snapshot: r.snapshot,
+    fingerprint: r.fingerprint,
+    verifyUrl: r.verifyUrl,
+    recorded: recordedFrom(r.recorded),
+    question: req.question,
+  });
+  const saved = await saveQuietly(entry, env);
+  return { ...r, runId: saved ? entry.id : null, parentId };
 }
 
 /** Writes the snapshot's fingerprint to the ledger. Only the hash, kind, decision id and version leave the server. */

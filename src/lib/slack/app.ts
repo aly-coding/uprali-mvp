@@ -7,9 +7,11 @@
 import { newDecisionId } from "@/lib/engine/decide";
 import { FIELDS, parseAmount } from "@/lib/engine/buildVsBuy";
 import type { GivenValue } from "@/lib/engine/types";
+import { getHistory } from "@/lib/history";
+import { slackOwner } from "@/lib/identity";
 import { getLedger } from "@/lib/ledger";
 import { allow } from "@/lib/ratelimit";
-import { runDecision } from "@/lib/service";
+import { runAndSave } from "@/lib/service";
 import { helpMessage, MAX_QUESTION, memoToSlack, stateFromMessage, type SlackState } from "./blocks";
 import { isSlackResponseUrl, verifySlackSignature } from "./verify";
 
@@ -62,9 +64,14 @@ function inputsFrom(state: SlackState): Record<string, GivenValue> {
   return out;
 }
 
-async function render(state: SlackState, deps: SlackDeps, record: boolean) {
+/** One history run per Slack decision, updated as people fill it in, approve it and record it. */
+export function slackRunId(team: string, decisionId: string): string {
+  return `slack_${team.replace(/[^A-Za-z0-9]/g, "").slice(0, 20)}_${decisionId}`.slice(0, 64);
+}
+
+async function render(state: SlackState, deps: SlackDeps, record: boolean, team: string) {
   const env = deps.env ?? process.env;
-  const result = await runDecision(
+  const result = await runAndSave(
     {
       question: state.q,
       inputs: inputsFrom(state),
@@ -74,6 +81,7 @@ async function render(state: SlackState, deps: SlackDeps, record: boolean) {
       record,
     },
     deps.base,
+    { owner: slackOwner(team, state.by.id || "unknown"), source: "slack", runId: slackRunId(team, state.d) },
     env,
   );
   const ledger = await getLedger(env);
@@ -97,6 +105,7 @@ export async function handleCommand(req: Request, deps: SlackDeps): Promise<Resp
   const responseUrl = form.get("response_url");
   const team = form.get("team_id") || "unknown";
   if (!text || /^help$/i.test(text)) return Response.json(helpMessage());
+  if (/^history$/i.test(text)) return ephemeral(await historyText(team, form.get("user_id") || "unknown", env));
   if (text.length > MAX_QUESTION) return ephemeral(`Keep the question under ${MAX_QUESTION.toLocaleString("en-US")} characters.`);
   if (!isSlackResponseUrl(responseUrl)) return ephemeral("Slack didn't send a reply address, so Uprali can't answer here.");
   if (!allow(`slack:${team}`, 20, 60_000)) return ephemeral("Uprali is answering a lot of questions in this workspace. Try again in a minute.");
@@ -111,12 +120,25 @@ export async function handleCommand(req: Request, deps: SlackDeps): Promise<Resp
   };
   deps.defer(async () => {
     try {
-      await post(deps, responseUrl, await render(state, deps, false));
+      await post(deps, responseUrl, await render(state, deps, false, team));
     } catch {
       await post(deps, responseUrl, { response_type: "ephemeral", text: "Uprali couldn't work that out. Try again in a moment." });
     }
   });
   return ephemeral("Working out the numbers…");
+}
+
+/** /uprali history: the person's last decisions, only to them. */
+export async function historyText(team: string, user: string, env: Env = process.env): Promise<string> {
+  try {
+    const items = await (await getHistory(env)).list(slackOwner(team, user), { limit: 10 });
+    if (!items.length) return "You haven't run any decisions with /uprali yet.";
+    const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const lines = items.map((d) => `• ${d.createdAt.slice(0, 10)}: ${esc(d.question.slice(0, 90) || d.title)}. *${esc(d.headline)}*${d.recorded ? " Recorded on NEAR." : ""} <${d.verifyUrl}|Verify>`);
+    return `Your last ${items.length} decisions:\n${lines.join("\n")}`;
+  } catch {
+    return "Uprali couldn't read your history just now. Try again in a moment.";
+  }
 }
 
 interface BlockActionsPayload {
@@ -171,7 +193,7 @@ export async function handleInteraction(req: Request, deps: SlackDeps): Promise<
 
   deps.defer(async () => {
     try {
-      const msg = await render(state, deps, record);
+      const msg = await render(state, deps, record, payload.team?.id ?? "unknown");
       await post(deps, responseUrl, { ...msg, replace_original: true });
     } catch {
       await post(deps, responseUrl, { response_type: "ephemeral", replace_original: false, text: "Uprali couldn't update the decision. Try again in a moment." });

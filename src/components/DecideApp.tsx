@@ -5,7 +5,7 @@ import { FIELDS } from "@/lib/engine/buildVsBuy";
 import { canonicalJson, sha256Hex, type DecisionSnapshot } from "@/lib/engine/snapshot";
 import type { Memo } from "@/lib/engine/types";
 import { MemoView, PrivateAiBadge } from "./MemoView";
-import { explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
+import { confirmHistorySignIn, endHistorySession, explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
 
 interface Config {
   providers: string[];
@@ -16,6 +16,8 @@ interface Config {
 }
 
 interface Result {
+  runId: string | null;
+  parentId: string | null;
   memo: Memo;
   snapshot: DecisionSnapshot;
   fingerprint: string;
@@ -55,9 +57,37 @@ export function DecideApp() {
   const [result, setResult] = useState<Result | null>(null);
   const [recorded, setRecorded] = useState<Recorded | null>(null);
   const [code, setCode] = useState("");
+  const [historyAccount, setHistoryAccount] = useState<string | null>(null);
+  const [parent, setParent] = useState<{ id: string; version: number; title: string } | null>(null);
   const unsub = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    fetch("/api/app/session")
+      .then((r) => r.json())
+      .then((s: { account: string | null }) => setHistoryAccount(s.account))
+      .catch(() => undefined);
+    // "Re-run with new numbers" from the History page: load that run's question and numbers.
+    const from = new URLSearchParams(window.location.search).get("from");
+    if (from) {
+      fetch(`/api/app/history/${encodeURIComponent(from)}`)
+        .then(async (r) => {
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || "Couldn't load that decision.");
+          const d = data.decision as { id: string; version: number; title: string; question: string; inputs: Record<string, { value?: unknown }> };
+          const top = Math.max(d.version, ...((data.versions as { version: number }[]) || []).map((v) => v.version));
+          setParent({ id: d.id, version: top, title: d.title });
+          setQuestion(d.question || "");
+          const vals: Record<string, string> = {};
+          for (const [k, v] of Object.entries(d.inputs || {})) {
+            const raw = v && typeof v === "object" && "value" in v ? v.value : v;
+            if (raw !== null && raw !== undefined && (typeof raw === "number" || typeof raw === "string")) vals[k] = String(raw);
+          }
+          setValues(vals);
+          if (Object.keys(vals).some((k) => !MAIN_FIELDS.includes(k))) setMore(true);
+          setDemo(true);
+        })
+        .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load that decision."));
+    }
     fetch("/api/config")
       .then((r) => r.json())
       .then(async (c: Config) => {
@@ -98,7 +128,7 @@ export function DecideApp() {
       const res = await fetch("/api/app/decide", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question, inputs, decided_by: who }),
+        body: JSON.stringify({ question, inputs, decided_by: who, ...(parent ? { parent_id: parent.id } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "The analyst couldn't run.");
@@ -107,6 +137,7 @@ export function DecideApp() {
       if (local !== data.fingerprint) throw new Error("The fingerprint didn't match the snapshot. Not recording this.");
       saveSnapshotLocally(data.fingerprint, data.snapshot);
       setResult(data);
+      if (parent && data.parentId) setParent({ ...parent, version: data.snapshot.version });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -123,6 +154,14 @@ export function DecideApp() {
       if (wallet && account) {
         const { txHash } = await recordWithWallet(wallet, { hash: result.fingerprint, kind: s.kind, caseId: s.decisionId, version: s.version });
         setRecorded({ by: account, txUrl: txHash ? explorerTx(txHash) : null, verifyUrl: result.verifyUrl, network: "NEAR testnet" });
+        // Let the history see it on the ledger. The server looks the fingerprint up itself.
+        if (result.runId) {
+          fetch(`/api/app/history/${encodeURIComponent(result.runId)}/check`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ txHash }),
+          }).catch(() => undefined);
+        }
       } else {
         const res = await fetch("/api/app/record", {
           method: "POST",
@@ -186,7 +225,25 @@ export function DecideApp() {
         {account ? (
           <>
             Signed in as <a href={explorerAccount(account)} target="_blank" rel="noreferrer"><strong>{account}</strong></a>
-            <button className="btn small" onClick={() => wallet && signOut(wallet)}>Sign out</button>
+            <button className="btn small" onClick={async () => { if (wallet) await signOut(wallet); await endHistorySession(); setHistoryAccount(null); }}>Sign out</button>
+            {historyAccount !== account && (
+              <button
+                className="btn small"
+                title="A free signature, nothing goes on chain. Your runs then follow your account to any device."
+                onClick={async () => {
+                  if (!wallet) return;
+                  setError("");
+                  try {
+                    const r = await confirmHistorySignIn(wallet);
+                    setHistoryAccount(r.account);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Couldn't confirm the sign-in.");
+                  }
+                }}
+              >
+                Keep history under {account}
+              </button>
+            )}
           </>
         ) : (
           <>Demo mode <span className="muted">
@@ -204,6 +261,11 @@ export function DecideApp() {
       <div className="layout">
         <section className="card ask">
           <h2>The decision</h2>
+          {parent && (
+            <p className="small">
+              Re-running <strong>{parent.title}</strong>. The result is saved as a new version; <a href={`/history?id=${encodeURIComponent(parent.id)}`}>the earlier one</a> stays as it was.
+            </p>
+          )}
           <textarea className="input" rows={5} value={question} onChange={(e) => setQuestion(e.target.value)} />
           <p className="muted small">Say what you know in plain words. Numbers you type below win over the text, and count as yours.</p>
           <div className="fields">
@@ -232,6 +294,13 @@ export function DecideApp() {
             <p className="muted">The memo appears here: the recommendation, the full {3}-year cost, and every number with its source and owner.</p>
           ) : (
             <>
+              <p className="muted small">
+                {result.runId ? (
+                  <>Saved to <a href={`/history?id=${encodeURIComponent(result.runId)}`}>your history</a>{result.snapshot.version > 1 ? ` as version ${result.snapshot.version}` : ""}.</>
+                ) : (
+                  "Couldn't save this run to your history."
+                )}
+              </p>
               <PrivateAiBadge memo={result.memo} />
               <MemoView memo={result.memo} />
               <div className="proof">

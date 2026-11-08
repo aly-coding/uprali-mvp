@@ -128,3 +128,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .plain { padding-left: 18px; }
 .plain li { margin: 4px 0; }
 .envblock { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12px; white-space: pre; }
+
+/* History page */
+.history th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted, #888); padding: 6px; }
+.history tbody tr:hover td { background: var(--panel); }
+.history .link { text-align: left; }
+.history .verdict { display: inline-block; font-size: 13px; }
+@media (max-width: 640px) { .history th:nth-child(4), .history td:nth-child(4) { display: none; } }

@@ -97,9 +97,36 @@ describe("MCP server", () => {
     return JSON.parse(line ? line.slice(6) : text);
   };
 
-  it("lists both tools", async () => {
+  it("lists its tools", async () => {
     const r = await call({ jsonrpc: "2.0", id: 1, method: "tools/list" });
-    expect(r.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(["build_vs_buy", "verify_decision"]);
+    expect(r.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(["build_vs_buy", "list_decisions", "verify_decision"]);
+  });
+
+  it("keeps an agent's decisions per API key and lists only that key's", async () => {
+    process.env.UPRALI_API_KEYS = `${KEY},other-key-0123456789abcdef`;
+    try {
+      const as = async (key: string, body: unknown) => {
+        const { POST } = await import("@/app/mcp/route");
+        const text = await (await POST(post("/mcp", body, { ...H, authorization: `Bearer ${key}` }))).text();
+        const line = text.split("\n").find((l) => l.startsWith("data: "));
+        return JSON.parse(line ? line.slice(6) : text);
+      };
+      const ran = await as(KEY, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "build_vs_buy", arguments: { question: "Build a CRM or keep HubSpot at $720 a year? Prototype 3 weeks." } } });
+      const runId = ran.result.structuredContent.runId;
+      expect(runId).toMatch(/^run_/);
+      const mine = await as(KEY, { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "list_decisions", arguments: {} } });
+      expect(mine.result.structuredContent.decisions.map((d: { id: string }) => d.id)).toContain(runId);
+      const one = await as(KEY, { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "list_decisions", arguments: { id: runId } } });
+      expect(one.result.structuredContent.decision.memo.decisionId).toBe(ran.result.structuredContent.decisionId);
+      const theirs = await as("other-key-0123456789abcdef", { jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "list_decisions", arguments: {} } });
+      expect(theirs.result.structuredContent.decisions.map((d: { id: string }) => d.id)).not.toContain(runId);
+      const { GET } = await import("@/app/api/v1/decisions/route");
+      const viaApi = await (await GET(new Request("http://localhost/api/v1/decisions", { headers: { authorization: `Bearer ${KEY}` } }))).json();
+      expect(viaApi.decisions[0].id).toBe(runId);
+      expect(viaApi.decisions[0].owner).toBeUndefined();
+    } finally {
+      delete process.env.UPRALI_API_KEYS;
+    }
   });
 
   it("runs build_vs_buy and returns a memo with its fingerprint", async () => {

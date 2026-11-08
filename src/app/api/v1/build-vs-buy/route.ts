@@ -2,7 +2,8 @@ import { isAuthorized, unauthorized } from "@/lib/auth";
 import { FIELDS, TEMPLATE } from "@/lib/engine/buildVsBuy";
 import { allow, clientKey } from "@/lib/ratelimit";
 import { buildVsBuyBody, cleanInputs, zodMessage } from "@/lib/schema";
-import { errorResponse, publicBaseUrl, runDecision } from "@/lib/service";
+import { apiOwner } from "@/lib/identity";
+import { errorResponse, publicBaseUrl, runAndSave } from "@/lib/service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -30,9 +31,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ error: zodMessage(parsed.error) }, { status: 400 });
   const b = parsed.data;
   try {
-    const result = await runDecision(
+    const result = await runAndSave(
       { question: b.question, title: b.title, inputs: cleanInputs(b.inputs), record: b.record, approvedBy: b.approved_by, decidedBy: b.decided_by || "api-agent" },
       publicBaseUrl(req),
+      { owner: apiOwner(req), source: "api", parentId: b.parent_id },
     );
     return Response.json(result);
   } catch (err) {

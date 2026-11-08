@@ -85,3 +85,31 @@ export function explorerTx(txHash: string): string {
 export function explorerAccount(accountId: string): string {
   return `https://testnet.nearblocks.io/address/${accountId}`;
 }
+
+/**
+ * Proves to the server that this browser holds the account's full-access key, by signing a
+ * sign-in message (NEP-413). Nothing is sent to the chain and nothing is spent. The server
+ * then keeps this account's decision history and moves this browser's runs into it.
+ */
+export async function confirmHistorySignIn(w: WalletHandle): Promise<{ account: string; moved: number }> {
+  const info = await fetch("/api/app/session").then((r) => r.json());
+  const { message, recipient, nonce } = info.signIn as { message: string; recipient: string; nonce: string };
+  const wallet = await w.selector.wallet();
+  if (!("signMessage" in wallet) || typeof wallet.signMessage !== "function") throw new Error("This wallet can't sign a sign-in message. Try Meteor or Intear.");
+  // Wallets read the nonce as bytes; a Uint8Array works where the types ask for a Buffer.
+  const bytes = Uint8Array.from(atob(nonce), (c) => c.charCodeAt(0));
+  const signed = await wallet.signMessage({ message, recipient, nonce: bytes as unknown as Buffer });
+  if (!signed) throw new Error("The wallet didn't return a signature.");
+  const res = await fetch("/api/app/session", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, nonce }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Couldn't confirm the sign-in.");
+  return data;
+}
+
+export async function endHistorySession(): Promise<void> {
+  await fetch("/api/app/session", { method: "DELETE" }).catch(() => undefined);
+}
