@@ -70,12 +70,12 @@ curl -s -X POST localhost:3000/api/v1/build-vs-buy \
 ## Demo script (about 3 minutes)
 
 1. **The problem (20 s).** "Our engineer built a CRM prototype in three weeks, so building looks cheaper than HubSpot. Is it?"
-2. **Sign in (15 s).** Open the live app, press **Sign in with NEAR wallet**, approve in MyNearWallet on testnet. The app shows your account, for example `aly-uprali.testnet`.
+2. **Sign in (15 s).** Open the live app, press **Sign in with NEAR wallet**, pick **Intear Wallet** and approve. The app shows your account, `uprali.testnet`.
 3. **Run the decision (40 s).** Paste the example question and press **Run the decision**. Point at:
    - the green **NEAR AI Cloud: Verified** badge, then open it to show the five attestation checks;
    - "the prototype is $12,000, but it's only 20% of the work; the full 3-year build is about $200,000";
    - the table: the numbers you typed are **Human / Fact**, the benchmarks are **Agent / Assumption**, and the engineer cost is flagged **Needs a human**.
-4. **Record it (30 s).** Press **Sign and record as aly-uprali.testnet**. Open **See the transaction** on NEAR Blocks: the contract call shows the fingerprint and your account as the signer. Nothing else about the decision is on chain.
+4. **Record it (30 s).** Press **Sign and record as uprali.testnet**. Open **See the transaction** on NEAR Blocks: the contract call shows the fingerprint and your account as the signer. Nothing else about the decision is on chain.
 5. **Verify it (30 s).** Press **Verify this decision**: **Match**, recorded by your account at that time. Change one number in the snapshot and check again: **No match**.
 6. **Agents (40 s).** Switch to Claude Desktop with the Uprali MCP server and ask the same question in plain words. Claude calls `build_vs_buy` and gets the same memo, sources and fingerprint. "Same engine, for people and for agents, with every number traceable."
 
@@ -131,19 +131,19 @@ You don't need to touch code. Each step is a few clicks; the terminal steps can 
 
 1. **GitHub.** The code lives in the public repo `aly-coding/uprali-mvp`.
 2. **NEAR AI Cloud key.** Sign up at NEAR AI Cloud and create an API key. Keep it to yourself: you'll paste it into Vercel in step 5, never into a chat.
-3. **A NEAR testnet wallet for you.** In MyNearWallet, switch to **testnet** and create an account, for example `aly-uprali.testnet`. This is the wallet you sign in with during the demo. Testnet tokens are free and worthless.
-4. **A testnet account for the server, and the contract.** On a laptop with Node installed, in the project folder:
-   ```bash
-   npx near-cli-rs account create-account sponsor-by-faucet-service uprali-relayer.testnet autogenerate-new-keypair save-to-legacy-keychain network-config testnet create
-   ```
-   This command wasn't run from this build machine, so if NEAR CLI asks something different, follow its prompts to create a testnet account funded by the faucet. The account's key is saved in `~/.near-credentials/testnet/uprali-relayer.testnet.json`. Put the account and its `private_key` into a file called `.env.local` as `NEAR_ACCOUNT_ID=` and `NEAR_PRIVATE_KEY=`, then run `npm run contract:deploy`. It prints a line like `NEAR_CONTRACT_ID=ledger.uprali-relayer.testnet`.
-5. **Vercel.** Import the GitHub repo in Vercel (it detects Next.js). Under **Settings → Environment Variables** add:
-   - `NEARAI_API_KEY`: from step 2
-   - `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`: from step 4
-   - `UPRALI_API_KEYS`: any long random text, for example 32 letters and digits. This is the key agents use.
-   - `ANTHROPIC_API_KEY`: optional, so Claude can step in if NEAR AI is down.
+3. **A NEAR testnet wallet for you.** Done: you made `uprali.testnet` in Intear Wallet. Meteor Wallet also works on testnet. (MyNearWallet's testnet is retired.) You need about 3.5 testnet NEAR in it for step 4; testnet NEAR is free from the faucet in your wallet or at near-faucet.io.
+4. **The ledger, from your browser (2 minutes, no terminal).** Open the live app at `/setup`.
+   - Press **Sign in with NEAR wallet**, pick **Intear Wallet**, sign in as `uprali.testnet`.
+   - Press **Create the ledger** and approve the one request in Intear. It creates two accounts of yours: `ledger.uprali.testnet` holds the contract, and `relayer.uprali.testnet` records for agents and for the no-wallet fallback.
+   - The page then puts the contract on `ledger.uprali.testnet` and locks it, so nobody can change it. The relayer's key can only record decisions, nothing else, and is made in your browser; it never goes to the server or into a chat.
+   - **You should see** six lines to copy. Press **Copy all six**.
+5. **Vercel.** In the Vercel project, open **Settings → Environment Variables**, click into the first **Key** box and paste: Vercel splits the six lines into six rows (`NEAR_NETWORK`, `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `RECORD_ACCESS_CODE`, `UPRALI_API_KEYS`). Keep **Production** ticked and press **Save**. `NEARAI_API_KEY` from step 2 should already be there. `ANTHROPIC_API_KEY` is optional, so Claude can step in if NEAR AI is down.
 
-   Then redeploy. Open the app: you should see **Sign in with NEAR wallet**, and `/api/config` should list `nearai` first.
+   Then open **Deployments**, open the menu on the top one and press **Redeploy**. Back on `/setup`, press **I've saved them in Vercel**. Open the app: you should see **Sign in with NEAR wallet**, and `/api/config` should list `nearai` first.
+
+   `RECORD_ACCESS_CODE` is the fallback for a live demo: if a wallet won't sign in, press **Continue in demo mode**, type that code next to **Record decision**, and the relayer records it on testnet. `UPRALI_API_KEYS` is the key agents use for `/mcp` and `/api/v1`.
+
+   For engineers: `npm run contract:deploy` does the same from a terminal with your own testnet key.
 6. **Submit.** Post the demo video on X, then submit the repo, the live link and the post in the hackathon form before **Nov 14, 2026 at 23:59 UTC (3:59 PM Pacific)**.
 
 ## Environment variables
@@ -162,9 +162,11 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 31 tests), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 36 tests, including recording through the relayer with the access code and no wallet), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
-**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, and wallet sign-in and signing in a real browser. Run the demo script once on the live deploy before recording the video.
+**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, and the `/setup` page's wallet request and contract deploy. Run the demo script once on the live deploy before recording the video.
+
+`npm audit` reports one high finding left in Meteor Wallet's SDK (`decode-uri-component` under `query-string` 7). The SDK only calls `stringify`, never the decoder the advisory is about, and the newer `query-string` breaks its import, so it stays until Meteor updates.
 
 ## Project layout
 
@@ -175,7 +177,9 @@ src/lib/ledger/      NEAR ledger client and the local demo ledger
 src/lib/service.ts   shared by the API, MCP server and demo screen
 src/app/mcp/         MCP server
 src/app/api/         HTTP API
-src/components/      demo screen, wallet sign-in, memo and verify page
+src/components/      demo screen, wallet sign-in (Intear, Meteor), memo, verify page, /setup page
+src/lib/setup.ts     helpers for the no-terminal ledger setup
+public/              the built contract, served for /setup
 contract/            Rust ledger contract
 scripts/             contract build and deploy, attestation check
 samples/             fictional example data

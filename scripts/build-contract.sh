@@ -12,4 +12,5 @@ sed '/\[dev-dependencies\]/,+1d' "$ROOT/contract/Cargo.toml" > "$BUILD/Cargo.tom
 ( cd "$BUILD" && cargo +stable generate-lockfile -q && cargo +1.81.0 build --release --target wasm32-unknown-unknown -q )
 mkdir -p "$ROOT/contract/res"
 cp "$BUILD/target/wasm32-unknown-unknown/release/uprali_ledger.wasm" "$ROOT/contract/res/"
+cp "$ROOT/contract/res/uprali_ledger.wasm" "$ROOT/public/" # served to the /setup page
 sha256sum "$ROOT/contract/res/uprali_ledger.wasm"

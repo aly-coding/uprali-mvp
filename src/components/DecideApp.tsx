@@ -171,7 +171,7 @@ export function DecideApp() {
               Sign in with NEAR wallet
             </button>
           ) : (
-            <p className="muted small">NEAR wallet sign-in turns on once the ledger contract is deployed on testnet.</p>
+            <p className="muted small">NEAR wallet sign-in turns on once the ledger is on testnet. Owner? <a href="/setup">Set it up</a>.</p>
           )}
           <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
           {error && <p className="error">{error}</p>}
@@ -189,7 +189,13 @@ export function DecideApp() {
             <button className="btn small" onClick={() => wallet && signOut(wallet)}>Sign out</button>
           </>
         ) : (
-          <>Demo mode <span className="muted">(decisions are recorded on the local demo ledger)</span>
+          <>Demo mode <span className="muted">
+            {config.wallet
+              ? config.relayerCodeEnabled
+                ? "(recording on NEAR testnet needs a wallet sign-in or the access code)"
+                : "(sign in with a NEAR wallet to record on testnet)"
+              : "(decisions are recorded on the local demo ledger)"}
+          </span>
             {config.wallet && <button className="btn small" onClick={() => wallet?.modal.show()}>Sign in with NEAR wallet</button>}
           </>
         )}

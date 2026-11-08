@@ -10,32 +10,36 @@ import type { WalletSelectorModal } from "@near-wallet-selector/modal-ui";
 
 export interface WalletConfig {
   networkId: "testnet";
-  contractId: string;
+  /** The ledger contract. Leave it out on the setup page, before the contract exists. */
+  contractId?: string;
 }
 
 export interface WalletHandle {
   selector: WalletSelector;
   modal: WalletSelectorModal;
-  contractId: string;
+  contractId: string | null;
 }
 
+/** Intear and Meteor both still work on testnet (MyNearWallet's testnet is retired). */
 export async function initWallet(cfg: WalletConfig): Promise<WalletHandle> {
-  const [{ setupWalletSelector }, { setupModal }, { setupMyNearWallet }] = await Promise.all([
+  const [{ setupWalletSelector }, { setupModal }, { setupIntearWallet }, { setupMeteorWallet }] = await Promise.all([
     import("@near-wallet-selector/core"),
     import("@near-wallet-selector/modal-ui"),
-    import("@near-wallet-selector/my-near-wallet"),
+    import("@near-wallet-selector/intear-wallet"),
+    import("@near-wallet-selector/meteor-wallet"),
   ]);
   const selector = await setupWalletSelector({
     network: cfg.networkId,
-    modules: [setupMyNearWallet()],
-    createAccessKeyFor: { contractId: cfg.contractId, methodNames: ["record"] },
+    modules: [setupIntearWallet(), setupMeteorWallet()],
+    ...(cfg.contractId ? { createAccessKeyFor: { contractId: cfg.contractId, methodNames: ["record"] } } : {}),
   });
   const modal = setupModal(selector, {
-    contractId: cfg.contractId,
-    methodNames: ["record"],
-    description: "Sign in with a NEAR testnet account. Uprali only asks to record decision fingerprints, never to move money.",
+    ...(cfg.contractId ? { contractId: cfg.contractId, methodNames: ["record"] } : {}),
+    description: cfg.contractId
+      ? "Sign in with a NEAR testnet account. Uprali only asks to record decision fingerprints, never to move money."
+      : "Sign in with the NEAR testnet account that will own the Uprali ledger.",
   });
-  return { selector, modal, contractId: cfg.contractId };
+  return { selector, modal, contractId: cfg.contractId ?? null };
 }
 
 export function signedInAccount(w: WalletHandle): string | null {
@@ -53,6 +57,7 @@ export async function recordWithWallet(
   w: WalletHandle,
   args: { hash: string; kind: string; caseId: string; version: number },
 ): Promise<{ txHash: string | null }> {
+  if (!w.contractId) throw new Error("No ledger contract is set up yet.");
   const { actionCreators } = await import("@near-js/transactions");
   const wallet = await w.selector.wallet();
   const outcome = await wallet.signAndSendTransaction({
