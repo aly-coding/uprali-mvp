@@ -240,12 +240,12 @@ table.model tr.driver th { color: var(--text); }
 
 /* Workspace: templates on the left, the conversation in the middle, the model on the right. */
 .workspace { display: grid; grid-template-columns: 232px minmax(0, 1fr) minmax(340px, 460px); min-height: calc(100vh - 49px); }
-.sidebar { background: var(--panel-2); border-right: 1px solid var(--border); padding: 14px 12px; position: sticky; top: 49px; height: calc(100vh - 49px); overflow-y: auto; }
+.app-sidebar { background: var(--panel-2); border-right: 1px solid var(--border); padding: 14px 12px; position: sticky; top: 49px; height: calc(100vh - 49px); overflow-y: auto; }
 .side-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 4px 6px; font-weight: 600; }
-.sidebar .templates.compact { grid-template-columns: 1fr; gap: 2px; }
-.sidebar .template { background: transparent; border-color: transparent; padding: 6px 8px; }
-.sidebar .template:hover { background: var(--panel); border-color: var(--border); }
-.sidebar .template.on { background: var(--panel); border-color: var(--border); box-shadow: var(--shadow); }
+.app-sidebar .templates.compact { grid-template-columns: 1fr; gap: 2px; }
+.app-sidebar .template { background: transparent; border-color: transparent; padding: 6px 8px; }
+.app-sidebar .template:hover { background: var(--panel); border-color: var(--border); }
+.app-sidebar .template.on { background: var(--panel); border-color: var(--border); box-shadow: var(--shadow); }
 .side-links { display: flex; flex-direction: column; gap: 2px; }
 .side-links a { color: var(--text); text-decoration: none; padding: 5px 8px; border-radius: 8px; }
 .side-links a:hover { background: var(--panel); }
@@ -298,9 +298,9 @@ fieldset.owner-card legend > span:first-child { color: var(--navy); }
 }
 @media (max-width: 760px) {
   .workspace { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 10px 16px; }
-  .sidebar .templates.compact { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
-  .sidebar .side-label, .sidebar .side-links { display: none; }
+  .app-sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 10px 16px; }
+  .app-sidebar .templates.compact { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+  .app-sidebar .side-label, .app-sidebar .side-links { display: none; }
   .side-who { margin-top: 8px; padding-top: 8px; }
   .conversation { padding: 16px; }
   .msg.user { max-width: 92%; }

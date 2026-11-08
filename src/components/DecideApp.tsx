@@ -578,7 +578,7 @@ export function DecideApp() {
 
   return (
     <main className="workspace">
-      <aside className="sidebar">
+      <aside className="app-sidebar">
         <button className="btn primary block" onClick={newCase}>+ New case</button>
         <p className="side-label">Templates</p>
         <TemplatePicker value={template} onPick={pick} compact />
