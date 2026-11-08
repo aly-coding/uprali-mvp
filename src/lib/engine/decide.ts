@@ -3,6 +3,7 @@ import { extractFacts, factsFor, narrate } from "./analyst";
 import { attestNearAi } from "./privacy";
 import type { Env } from "./providers";
 import type { Confidence, GivenValue, Memo, ModelUse, PrivateAiSummary } from "./types";
+import { fundingCheck, killCriteriaFor, valueCase, type Funding, type KillCriteria, type ValueCase } from "./value";
 
 export interface DecideRequest {
   /** Free text from the person, e.g. "Should we build our own CRM or keep paying $720 a year for HubSpot?" */
@@ -21,6 +22,8 @@ export function newDecisionId(now = new Date()): string {
 }
 
 const REQUIRED = ["buy_annual_cost", "prototype_weeks"];
+
+const pct = (n: number | null) => (n === null ? "not known" : `${Math.round(n * 1000) / 10}%`);
 
 export async function decide(req: DecideRequest, env: Env = process.env): Promise<Memo> {
   const now = req.now ?? new Date();
@@ -54,6 +57,7 @@ export async function decide(req: DecideRequest, env: Env = process.env): Promis
     why: `Still needed from a person: ${gaps.filter((g) => inputs.find((i) => i.key === g.key)?.value === null).map((g) => g.label.toLowerCase()).join(", ")}.`,
   };
   let assumptionShare: number | null = null;
+  let value: ValueCase | null = null, funding: Funding | null = null, killCriteria: KillCriteria | null = null;
 
   if (canCompute) {
     buy = buySide(v);
@@ -78,6 +82,33 @@ export async function decide(req: DecideRequest, env: Env = process.env): Promis
         ? `Over ${years} years, building costs ${usd(build.total)} against ${usd(buy.total)} to buy, ${usd(difference)} more. The prototype alone is ${usd(prototypeOnlyCost)}, about ${v.prototype_share_pct}% of the real build.`
         : `Over ${years} years, building costs ${usd(build.total)} against ${usd(buy.total)} to buy, ${usd(-difference)} less, even after upkeep, security, on-call and the engineers' time off the core product.`,
     };
+
+    // Return on investment against the status quo, from the finance playbook's rules.
+    const all = Object.fromEntries(inputs.map((i) => [i.key, i.value]));
+    value = valueCase(all, buy, build);
+    const [, b, d] = value.options;
+    const cashCase = b.financial !== null && d.financial !== null;
+    const neither = cashCase && (b.netRoi ?? 0) < 0 && (d.netRoi ?? 0) < 0 && b.payback.months === null && d.payback.months === null;
+    // Freed-up time can still justify it, unless someone said the return has to be hard cash.
+    const capacityCarries = value.roiType !== "hard" && ((buyWins ? b : d).grossRoi ?? 0) > 0;
+    if (neither && value.roiType !== "strategic" && value.roiType !== "risk" && !capacityCarries) {
+      recommendation = {
+        option: "status_quo",
+        headline: "Not now: keep things as they are",
+        confidence: recommendation.confidence,
+        why: `Neither option pays for itself in cash within ${years} years: net ROI is ${pct(b.netRoi)} to buy and ${pct(d.netRoi)} to build, and neither pays back within 36 months. ${buyWins ? "Buying" : "Building"} is still the cheaper way if you go ahead, and a strategic or risk return would change this.`,
+      };
+    } else if (neither) {
+      recommendation.why += ` Neither option pays back in cash within 36 months; the case rests on ${value.roiType === "strategic" || value.roiType === "risk" ? `its ${value.roiType} return` : "the time it frees up, which is capacity, not cash"}.`;
+    } else if (!cashCase) {
+      recommendation.why += " This compares cost only: nobody has confirmed cash savings yet, so return on investment and payback are still open.";
+    } else {
+      const o = buyWins ? b : d;
+      recommendation.why += ` On confirmed savings, net ROI is ${pct(o.netRoi)} and payback is ${o.payback.text}.`;
+    }
+    funding = fundingCheck(value, recommendation.option, buy, build);
+    const owner = typeof v.decision_owner === "string" ? v.decision_owner : inputs.find((i) => i.key === "decision_owner")?.value;
+    killCriteria = recommendation.option === "status_quo" ? null : killCriteriaFor(value, buyWins ? "buy" : "build", typeof owner === "string" && owner.trim() ? owner.trim().slice(0, 120) : null, all);
   }
 
   const draft = {
@@ -97,6 +128,9 @@ export async function decide(req: DecideRequest, env: Env = process.env): Promis
         : null,
     breakEvenAnnualSubscription: breakEven,
     whatWouldChangeMyMind: flips,
+    value,
+    funding,
+    killCriteria,
     inputs,
     gaps,
     assumptionShareOfBuildCost: assumptionShare,

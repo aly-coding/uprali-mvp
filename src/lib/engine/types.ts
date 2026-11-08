@@ -1,6 +1,8 @@
+import type { Funding, KillCriteria, ValueCase } from "./value";
+
 export type Owner = "human" | "agent";
 export type Confidence = "high" | "medium" | "low";
-export type Unit = "text" | "usd" | "usd_per_year" | "usd_per_week" | "pct" | "weeks" | "hours_per_week" | "hours_per_month" | "count" | "years";
+export type Unit = "text" | "usd" | "usd_per_year" | "usd_per_week" | "pct" | "weeks" | "hours_per_week" | "hours_per_month" | "count" | "years" | "hours_per_year" | "usd_per_hour" | "months";
 
 /** One number in the decision, with where it came from. Every value in a memo is one of these. */
 export interface Input {
@@ -80,7 +82,7 @@ export interface Memo {
   title: string;
   /** complete: every number is in. draft: computed, but a person should confirm some estimates. needs_human: a number only a person can give is missing. */
   status: "complete" | "draft" | "needs_human";
-  recommendation: { option: "buy" | "build" | null; headline: string; confidence: Confidence; why: string };
+  recommendation: { option: "buy" | "build" | "status_quo" | null; headline: string; confidence: Confidence; why: string };
   horizonYears: number;
   buy: Side | null;
   build: Side | null;
@@ -89,6 +91,12 @@ export interface Memo {
   prototypeTrap: string | null;
   breakEvenAnnualSubscription: number | null;
   whatWouldChangeMyMind: FlipPoint[];
+  /** Return on investment against the status quo: cash kept apart from freed-up time. */
+  value: ValueCase | null;
+  /** The CFO funding check and the "not now" reasons. */
+  funding: Funding | null;
+  /** What must move, by when, and who can stop it. */
+  killCriteria: KillCriteria | null;
   biggestRisk: string;
   cfoQuestions: string[];
   spoken30s: string;

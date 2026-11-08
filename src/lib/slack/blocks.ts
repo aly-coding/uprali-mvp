@@ -84,6 +84,15 @@ export function memoToSlack(
   });
   if (memo.recommendation.why) blocks.push({ type: "section", text: md(esc(memo.recommendation.why)) });
   if (memo.prototypeTrap) blocks.push({ type: "section", text: md(`*The prototype trap:* ${esc(memo.prototypeTrap)}`) });
+  if (memo.value) {
+    const pct = (n: number | null) => (n === null ? "not known" : `${Math.round(n * 1000) / 10}%`);
+    const rows = memo.value.options
+      .filter((o) => o.option !== "status_quo")
+      .map((o) => `*${o.label}:* ${o.financial === null ? "ROI needs confirmed savings" : `net ROI ${pct(o.netRoi)}, payback ${o.payback.text}`}${o.capacity !== null ? `, time freed worth ${usd(o.capacity)} (not cash)` : ""}`);
+    const k = memo.killCriteria;
+    if (k) rows.push(`*When to stop:* ${esc(k.metric)}, at least ${esc(k.minimumEffect.replace(/^At least /, ""))}, checked by ${esc(k.window.split(" (")[0])}. Owner: ${k.owner ? esc(k.owner) : "needs a human"}.`);
+    blocks.push({ type: "section", text: md(rows.join("\n")) });
+  }
 
   const estimated = memo.inputs.filter((i) => i.isAssumption).length;
   blocks.push({
@@ -96,7 +105,10 @@ export function memoToSlack(
   const confirm = memo.inputs
     .filter((i) => i.needsHuman && !missing.some((m) => m.key === i.key))
     .map((i) => ({ key: i.key, label: i.label, why: i.source, current: i.value === null ? null : String(i.value) }));
-  const toAsk = [...missing, ...confirm].slice(0, 4);
+  const roi = (memo.value?.missing ?? [])
+    .filter((m) => m.key === "confirmed_annual_savings" || m.key === "current_annual_cost")
+    .map((m) => ({ key: m.key, label: m.label, why: m.why, current: null as string | null }));
+  const toAsk = [...missing, ...confirm, ...roi].slice(0, 5);
   if (toAsk.length) {
     blocks.push({ type: "divider" });
     blocks.push({ type: "section", text: md(`*Needs a human* (${toAsk.length}). Type a number and press Enter, and the decision updates.`) });

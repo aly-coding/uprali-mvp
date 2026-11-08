@@ -82,6 +82,9 @@ describe("/uprali", () => {
     expect(blocks[0].text.text).toContain("HubSpot");
     const inputs = blocks.filter((b) => b.type === "input");
     expect(inputs.length).toBeGreaterThan(0);
+    // Return on investment waits on confirmed savings, and Slack offers a box for it.
+    expect(JSON.stringify(blocks)).toContain("ROI needs confirmed savings");
+    expect(inputs.map((b) => b.block_id)).toContain("fill:confirmed_annual_savings");
     const actions = blocks.find((b) => b.type === "actions");
     const state = decodeState(actions.elements[0].value)!;
     expect(state.q).toBe(QUESTION);
@@ -118,6 +121,7 @@ describe("/uprali", () => {
     await h.settle();
     const fourth = JSON.stringify(h.posts[3].body.blocks);
     expect(fourth).toContain("Recorded on the demo ledger");
+    expect(fourth).toContain("When to stop");
     expect(fourth).toContain("https://uprali.example/verify?hash=");
   });
 

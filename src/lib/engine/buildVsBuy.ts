@@ -26,6 +26,8 @@ export interface FieldDef {
   humanShouldConfirm?: boolean;
   min?: number;
   max?: number;
+  /** Part of the return-on-investment check, not the cost comparison. Missing stays "not given", never zero, and never blocks the decision. */
+  optional?: boolean;
 }
 
 export const FIELDS: FieldDef[] = [
@@ -48,9 +50,30 @@ export const FIELDS: FieldDef[] = [
   { key: "handover_weeks", label: "Engineer-weeks to take over the build", unit: "weeks", ask: "Engineer-weeks for someone new to learn the build if the builder leaves.", benchmark: 4, benchmarkSource: "Benchmark: about a month to take over an undocumented internal tool", min: 0 },
   { key: "opportunity_pct", label: "Value lost on the core product", unit: "pct", ask: "How much more an engineer-week earns on your core product than it costs, as a share of its cost.", benchmark: 50, benchmarkSource: "Benchmark: assume core product work returns 1.5x its cost", humanShouldConfirm: true, min: 0, max: 1000 },
   { key: "horizon_years", label: "Years to compare", unit: "years", ask: "Over how many years should we compare?", benchmark: 3, benchmarkSource: "Default: 3 years, the usual horizon for a software decision", min: 1, max: 10 },
+  // Return on investment, measured against the status quo. Optional: the cost comparison works without them.
+  { key: "current_annual_cost", label: "What you pay today for this job", unit: "usd_per_year", ask: "What do you pay a year today for this job (the status quo), if anything? Both options would replace it.", optional: true, min: 0 },
+  { key: "confirmed_annual_savings", label: "Confirmed cash savings per year", unit: "usd_per_year", ask: "Cash a year Finance confirms the change saves, for example avoided hires times their loaded cost, or contracts you can cancel. Freed-up time doesn't count here.", optional: true, min: 0 },
+  { key: "work_hours_year", label: "Hours a year spent on this work today", unit: "hours_per_year", ask: "How many hours a year do people spend today on the work this would change?", optional: true, min: 0 },
+  { key: "time_reduction_pct", label: "Time saved when it's used", unit: "pct", ask: "By how much would it cut that time for someone who uses it?", optional: true, min: 0, max: 100 },
+  { key: "adoption_pct", label: "Share of people who'll use it", unit: "pct", ask: "What share of the people doing this work will actually use it?", benchmark: 80, benchmarkSource: "Benchmark: 80% adoption as the base case (60% conservative, 90% optimistic)", optional: true, min: 0, max: 100 },
+  { key: "staff_hourly_cost", label: "Loaded cost of an hour of their time", unit: "usd_per_hour", ask: "Fully loaded cost of one hour of the people whose time is freed.", optional: true, min: 0 },
+  { key: "buy_time_to_value_months", label: "Months until the bought tool pays off", unit: "months", ask: "Months from signing until people use the bought tool day to day.", benchmark: 3, benchmarkSource: "Benchmark: about 3 months to roll out a bought tool", optional: true, min: 0, max: 36 },
+  { key: "build_time_to_value_months", label: "Months until the build pays off", unit: "months", ask: "Months from starting until people use the build day to day.", benchmark: (v) => buildMonths(v), benchmarkSource: "Estimate: the full build's engineer-weeks with one engineer full time, at least 6 months", optional: true, min: 0, max: 60 },
+  { key: "displaced_initiative", label: "What the team won't do meanwhile", unit: "text", ask: "If you build, which project waits? This is the opportunity cost; it's recorded but kept out of ROI and payback.", optional: true },
+  { key: "roi_type", label: "Kind of return", unit: "text", ask: "Is the return hard (cash, cost avoided), strategic (retention, pricing, defensibility) or risk (security, compliance, reliability)?", optional: true },
+  { key: "decision_owner", label: "Who can stop it", unit: "text", ask: "Who owns the kill criteria: the person who checks the result and can stop it?", optional: true },
 ];
 
 const HOURS_PER_WEEK = 40;
+
+/** Calendar months for one engineer to do the whole build, used when nobody gives a time to value. */
+function buildMonths(v: Record<string, number | string | null>): number {
+  const proto = num(v.prototype_weeks);
+  if (!proto) return 6;
+  const share = Math.max(0.01, (num(v.prototype_share_pct) || 20) / 100);
+  const weeks = proto / share + num(v.integrations_count) * num(v.integration_weeks_each);
+  return Math.max(6, Math.min(36, Math.round(weeks / 4.345)));
+}
 
 export function num(x: unknown): number {
   return typeof x === "number" && Number.isFinite(x) ? x : 0;
@@ -136,11 +159,15 @@ export function resolveInputs(given: Record<string, GivenValue | undefined>, ext
   // Benchmarks last, once the stated values are known (some benchmarks depend on them).
   for (const f of FIELDS) {
     if (out[f.key]) continue;
+    if (f.benchmark === undefined && f.optional) {
+      out[f.key] = { key: f.key, label: f.label, value: null, unit: f.unit, source: "Not given", owner: "human", isAssumption: false, confidence: "low", needsHuman: false };
+      continue;
+    }
     if (f.benchmark === undefined) {
       out[f.key] = { key: f.key, label: f.label, value: null, unit: f.unit, source: "Missing", owner: "human", isAssumption: false, confidence: "low", needsHuman: true };
       continue;
     }
-    if (typeof f.benchmark === "function" && raw.buy_annual_cost == null) {
+    if (f.key === "buy_setup_cost" && raw.buy_annual_cost == null) {
       // This benchmark depends on the subscription cost, which is still missing.
       out[f.key] = { key: f.key, label: f.label, value: null, unit: f.unit, source: "Waiting on the subscription cost", owner: "agent", isAssumption: true, confidence: "low", needsHuman: false };
       continue;
@@ -291,6 +318,7 @@ export function flipPoints(v: Values, inputs: Input[], limit = 3): FlipPoint[] {
 function unitRound(n: number, unit: Unit): number {
   if (unit === "pct" || unit === "weeks" || unit === "hours_per_week" || unit === "hours_per_month") return Math.round(n * 10) / 10;
   if (unit === "count" || unit === "years") return Math.round(n);
+  if (unit === "months") return Math.round(n * 10) / 10;
   return Math.round(n);
 }
 
@@ -314,6 +342,12 @@ export function fmt(v: number | string | null, unit: Unit): string {
       return `${v} hours a month`;
     case "years":
       return `${v} year${v === 1 ? "" : "s"}`;
+    case "hours_per_year":
+      return `${v.toLocaleString("en-US")} hours a year`;
+    case "usd_per_hour":
+      return `${usd0(v)} an hour`;
+    case "months":
+      return `${v} month${v === 1 ? "" : "s"}`;
     default:
       return String(v);
   }

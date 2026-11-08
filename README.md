@@ -121,6 +121,20 @@ Every dollar figure is computed in code (`src/lib/engine/buildVsBuy.ts`). Models
 
 The memo also gives the subscription price at which buying stops being cheaper, and the inputs that would flip the answer and at what value.
 
+**Return on investment, against keeping things as they are.** The rules come from Aly's finance playbook (`src/lib/engine/value.ts`):
+
+- Three options: keep things as they are (the baseline, no new spend and no new benefit), buy, and build.
+- Cash and freed-up time are kept apart. Only savings Finance confirms count as cash, for **net ROI** and **payback**. The value of time people get back (hours a year × time saved × adoption × hourly cost) is capacity, not cash; it shows only in **gross ROI**.
+- Spend is incremental: what each option costs minus what you pay today for the job.
+- Benefits start after time to value (about 3 months to roll out a bought tool, the build's length for a build), so year 1 counts only the months after launch.
+- Opportunity cost (the project that waits while you build) is recorded with the decision, but kept out of ROI and payback.
+- Payback is interpolated inside the year cumulative cash turns positive. Past 36 months it reads "Beyond 36 months", with no number.
+- Conservative, base and optimistic scenarios halve or raise time saved and adoption (for example 10%/60%, 20%/80%, 30%/90%).
+- A missing input is never treated as zero: the memo lists what the ROI case still needs, and these inputs never block the cost comparison.
+- If confirmed cash is given and neither option pays back within 36 months, and nobody says the return is strategic or risk (or freed-up time doesn't carry it), the recommendation is **Not now: keep things as they are**.
+
+The memo then runs the CFO funding check (reduces a major cost driver, protects downside, improves retention or pricing, has a leading indicator), the reasons for "not now" (no causal link, diffuse benefit, heavy upkeep, cannibalizing a higher-margin line, added complexity), and sets **kill criteria**: the metric that must move, the minimum effect, the date to check by, the owner who can stop it, and the fallback. The playbook's worked example is a regression test (`tests/value.test.ts`).
+
 **Where each number comes from**, in order: a value the caller gave (with its own source and owner), a fact stated in the question (owner: human, source: the quote), or a labelled benchmark (owner: agent, assumption, low confidence). Numbers with no sensible benchmark, like the subscription price or the prototype time, stay empty and are marked **needs a human**. A memo is **complete** when no number still needs a human, **draft** when some do, and **needs a human** when it can't be computed yet. A decision that needs a human can't be recorded.
 
 **Guards on the models.** An extracted fact is kept only if its quote is really in the question and its number really is in the quote. Prose from a model is kept only if every dollar amount in it is one the engine computed; otherwise the built-in wording is used. Instructions inside the question are ignored.
@@ -183,7 +197,7 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 43 tests, including recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 55 tests, including the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
 **Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's wallet request and contract deploy, and the Slack app against real Slack. Run the demo script once on the live deploy before recording the video.
 

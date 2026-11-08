@@ -17,7 +17,7 @@ export interface DecisionSnapshot {
   decidedAt: string;
   decidedBy: string;
   approvers: string[];
-  recommendation: { option: "buy" | "build" | null; headline: string };
+  recommendation: { option: "buy" | "build" | "status_quo" | null; headline: string };
   status: Memo["status"];
   horizonYears: number;
   totals: { buy: number | null; build: number | null; difference: number | null };
