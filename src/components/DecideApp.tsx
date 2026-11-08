@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FIELDS } from "@/lib/engine/buildVsBuy";
+import { FIELDS, FIELD_GROUPS, type FieldGroup } from "@/lib/engine/buildVsBuy";
+import { SUGGESTION_SOURCE, type ToolSuggestion } from "@/lib/engine/advisorShared";
 import { canonicalJson, sha256Hex, type DecisionSnapshot } from "@/lib/engine/snapshot";
 import type { Memo } from "@/lib/engine/types";
 import { MemoView, PrivateAiBadge } from "./MemoView";
+import { Advisor } from "./Advisor";
+import { MicButton, ReadAloud, appendSpoken } from "./Voice";
 import { confirmHistorySignIn, endHistorySession, explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
 
 interface Config {
@@ -34,6 +37,8 @@ interface Recorded {
 const EXAMPLE =
   "Should we build our own CRM or keep paying for HubSpot? We pay $720 a year for HubSpot Starter. Our engineer built a working prototype in 3 weeks. It would need 2 integrations, email and billing.";
 
+const groupInfo = (g: FieldGroup) => FIELD_GROUPS.find((x) => x.id === g) ?? { id: g, title: "", blurb: "" };
+
 const MAIN_FIELDS = ["tool_name", "buy_annual_cost", "prototype_weeks", "engineer_weekly_cost"];
 
 export function saveSnapshotLocally(fingerprint: string, snapshot: DecisionSnapshot) {
@@ -59,6 +64,8 @@ export function DecideApp() {
   const [code, setCode] = useState("");
   const [historyAccount, setHistoryAccount] = useState<string | null>(null);
   const [parent, setParent] = useState<{ id: string; version: number; title: string } | null>(null);
+  /** Fields filled from an advisor suggestion, not typed by the person. Typing over one makes it theirs. */
+  const [suggested, setSuggested] = useState<Record<string, true>>({});
   const unsub = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -108,7 +115,25 @@ export function DecideApp() {
   }, []);
 
   const who = account ?? (demo ? "demo-user" : null);
-  const fields = useMemo(() => FIELDS.filter((f) => (more ? true : MAIN_FIELDS.includes(f.key))), [more]);
+  const groups = useMemo(() => {
+    const order: FieldGroup[] = ["buy", "build", "value", "general"];
+    return order
+      .map((g) => ({ g, fields: FIELDS.filter((f) => (f.group ?? "general") === g && (more || MAIN_FIELDS.includes(f.key))) }))
+      .filter((x) => x.fields.length > 0);
+  }, [more]);
+
+  function compare(s: ToolSuggestion, seats: number | null) {
+    const next: Record<string, string> = { ...values, tool_name: `${s.name}${s.plan ? ` ${s.plan}` : ""}` };
+    const marks: Record<string, true> = { ...suggested, tool_name: true };
+    if (s.estimatedAnnual !== null) {
+      next.buy_annual_cost = String(s.estimatedAnnual);
+      marks.buy_annual_cost = true;
+    } else if (s.pricePerSeatMonth !== null && seats === null) {
+      setError(`Say how many people will use ${s.name} so Uprali can work out the yearly cost.`);
+    }
+    setValues(next);
+    setSuggested(marks);
+  }
 
   async function run() {
     setBusy("deciding");
@@ -122,7 +147,9 @@ export function DecideApp() {
       const f = FIELDS.find((x) => x.key === k);
       const n = Number(v.replace(/[$,\s]/g, ""));
       const value = f?.unit === "text" || !Number.isFinite(n) ? v : n;
-      inputs[k] = { value, owner: "human", is_assumption: false, source: `Entered by ${who} in Uprali` };
+      inputs[k] = suggested[k]
+        ? { value, owner: "agent", is_assumption: true, confidence: "low", source: SUGGESTION_SOURCE }
+        : { value, owner: "human", is_assumption: false, source: `Entered by ${who} in Uprali` };
     }
     try {
       const res = await fetch("/api/app/decide", {
@@ -268,21 +295,42 @@ export function DecideApp() {
             </p>
           )}
           <textarea className="input" rows={5} value={question} onChange={(e) => setQuestion(e.target.value)} />
-          <p className="muted small">Say what you know in plain words. Numbers you type below win over the text, and count as yours.</p>
-          <div className="fields">
-            {fields.map((f) => (
-              <label key={f.key}>
-                <span>{f.label}</span>
-                <input
-                  className="input"
-                  placeholder={typeof f.benchmark === "number" ? `benchmark ${f.benchmark}` : f.unit === "text" ? "" : "unknown"}
-                  value={values[f.key] ?? ""}
-                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
-                  title={f.ask}
-                />
-              </label>
-            ))}
+          <div className="row">
+            <MicButton label="Say the decision" onText={(t) => setQuestion((q) => appendSpoken(q, t))} />
+            <span className="muted small">Say or type what you know in plain words. Numbers you type below win over the text, and count as yours.</span>
           </div>
+          <Advisor question={question} onCompare={compare} />
+          {groups.map(({ g, fields }) => (
+            <fieldset key={g} className={`group ${g}`}>
+              <legend>{groupInfo(g).title}</legend>
+              <p className="muted small">{groupInfo(g).blurb}</p>
+              <div className="fields">
+                {fields.map((f) => (
+                  <label key={f.key}>
+                    <span>
+                      {f.label}
+                      {suggested[f.key] && <span className="badge suggest">Suggestion, verify</span>}
+                    </span>
+                    <input
+                      className="input"
+                      placeholder={typeof f.benchmark === "number" ? `benchmark ${f.benchmark}` : f.unit === "text" ? "" : "unknown"}
+                      value={values[f.key] ?? ""}
+                      onChange={(e) => {
+                        setValues({ ...values, [f.key]: e.target.value });
+                        if (suggested[f.key]) {
+                          const rest = { ...suggested };
+                          delete rest[f.key];
+                          setSuggested(rest);
+                        }
+                      }}
+                      title={f.ask}
+                    />
+                    {f.help && <small className="help">{f.help}</small>}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
           <button className="link" onClick={() => setMore(!more)}>{more ? "Fewer numbers" : "More numbers (upkeep, security, on-call, turnover…)"}</button>
           <button className="btn primary big" onClick={run} disabled={busy !== "" || question.trim().length < 5}>
             {busy === "deciding" ? "Working it out…" : "Run the decision"}
@@ -304,6 +352,7 @@ export function DecideApp() {
               </p>
               <PrivateAiBadge memo={result.memo} />
               <MemoView memo={result.memo} />
+              <p className="row"><ReadAloud text={result.memo.spoken30s} /></p>
               <div className="proof">
                 <h3>Proof on NEAR</h3>
                 <p className="small">

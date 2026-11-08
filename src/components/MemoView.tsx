@@ -14,7 +14,11 @@ function Badges({ i }: { i: Input }) {
   return (
     <span className="badges">
       <span className={`badge ${i.owner === "human" ? "human" : "agent"}`}>{i.owner === "human" ? "Human" : "Agent"}</span>
-      <span className={`badge ${i.isAssumption ? "assume" : "fact"}`}>{i.isAssumption ? "Assumption" : "Fact"}</span>
+      {i.source.startsWith("Suggestion") ? (
+        <span className="badge suggest">Suggestion, verify</span>
+      ) : (
+        <span className={`badge ${i.isAssumption ? "assume" : "fact"}`}>{i.isAssumption ? "Assumption" : "Fact"}</span>
+      )}
       {i.needsHuman && <span className="badge gap">Needs a human</span>}
     </span>
   );

@@ -4,7 +4,8 @@ import { z } from "zod";
 import { isAuthorized, unauthorized } from "@/lib/auth";
 import { TEMPLATE } from "@/lib/engine/buildVsBuy";
 import { allow, clientKey } from "@/lib/ratelimit";
-import { cleanInputs, fieldShape } from "@/lib/schema";
+import { adviseBody, cleanInputs, fieldShape } from "@/lib/schema";
+import { advise, SUGGESTION_SOURCE } from "@/lib/engine/advisor";
 import { getHistory } from "@/lib/history";
 import { listFor, publicEntry } from "@/lib/historyApi";
 import { apiOwner } from "@/lib/identity";
@@ -79,6 +80,32 @@ function makeHandler(base: string) {
           } catch (err) {
             return { ...text(err instanceof Error && "userMessage" in err ? String((err as { userMessage: string }).userMessage) : "Couldn't check that."), isError: true };
           }
+        },
+      );
+      server.registerTool(
+        "suggest_tools",
+        {
+          title: "Suggest cheaper tools to compare",
+          description:
+            "Before running build_vs_buy, ask what the tool must do, how many people use it, the budget, what they use today and what it " +
+            "must connect to, then call this. It suggests existing products that may cover the must-haves for less (for example cheaper " +
+            "than Salesforce), with a rough price per seat. Everything it returns is a suggestion, not a fact: tell the person to verify " +
+            "each price. If they pick one, pass it to build_vs_buy as tool_name and buy_annual_cost with owner 'agent', is_assumption true " +
+            "and the source given in structuredContent.sourceToUse.",
+          inputSchema: z.object({ question: adviseBody.shape.question, answers: adviseBody.shape.answers }),
+        },
+        async ({ question, answers }) => {
+          const a = await advise(question ?? "", answers ?? {});
+          const lines = a.suggestions.map((s) => {
+            const price = s.pricePerSeatMonth !== null ? `about $${s.pricePerSeatMonth} per user a month` : "price unknown";
+            const year = s.estimatedAnnual !== null ? `, about $${s.estimatedAnnual.toLocaleString("en-US")} a year` : "";
+            return `- ${s.name}${s.plan ? ` ${s.plan}` : ""}: ${price}${year} (${s.label}). ${s.why}`;
+          });
+          const ask = a.followUps.length ? ["", "", "Worth asking first:", ...a.followUps.map((q) => `- ${q}`)].join("\n") : "";
+          return {
+            ...text([`Suggestions, not facts. ${a.note}`, "", a.advice, "", ...lines].join("\n") + ask),
+            structuredContent: { ...a, sourceToUse: SUGGESTION_SOURCE },
+          };
         },
       );
       server.registerTool(

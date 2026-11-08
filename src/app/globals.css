@@ -136,3 +136,33 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .history .verdict { display: inline-block; font-size: 13px; }
 @media (max-width: 640px) { .history th:nth-child(4), .history td:nth-child(4) { display: none; } }
 a.btn { text-decoration: none; display: inline-block; text-align: center; }
+
+/* Grouped form */
+fieldset.group { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 12px; margin: 12px 0 0; }
+fieldset.group legend { font-weight: 600; padding: 0 6px; }
+fieldset.group.buy { border-color: var(--accent); }
+fieldset.group > p { margin: 0 0 8px; }
+.fields label .help { display: block; font-size: 11px; opacity: 0.75; margin-top: 3px; line-height: 1.35; }
+.fields label > span .badge { margin-left: 6px; }
+
+/* Voice */
+.mic { display: inline-flex; align-items: center; gap: 6px; }
+.btn.listening { border-color: var(--warn); color: var(--warn); }
+
+/* Advisor */
+.advisor { margin: 12px 0 0; padding: 10px 12px; border: 1px dashed var(--accent); border-radius: 8px; }
+.advisor.closed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-style: dotted; }
+.advisor h3 { margin: 0; }
+.advisor .group-head { display: flex; justify-content: space-between; align-items: center; }
+.advisor .answer { display: block; margin: 8px 0; }
+.advisor .answer > span:first-child { display: block; font-size: 13px; margin-bottom: 3px; }
+.advisor .with-mic { display: flex; gap: 6px; align-items: center; }
+.advisor .with-mic .input { flex: 1; }
+.advice { margin-top: 10px; }
+.suggestions { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.suggestions li { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.suggestions li.picked { border-color: var(--accent); }
+.suggestions li p { margin: 4px 0; }
+.row.between { justify-content: space-between; }
+.warn-text { color: var(--warn); }
+.badge.suggest { border-style: dashed; border-color: var(--warn); color: var(--warn); }

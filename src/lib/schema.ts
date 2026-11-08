@@ -43,6 +43,20 @@ export function cleanInputs(x: Record<string, unknown> | undefined): Record<stri
   return out;
 }
 
+export const adviseBody = z.object({
+  question: z.string().max(4000).optional(),
+  answers: z
+    .object({
+      must_haves: z.string().max(500).optional().describe("What the tool must do, the features you can't live without"),
+      seats: z.string().max(40).optional().describe("How many people will use it"),
+      budget_per_year: z.string().max(60).optional().describe("Most you'd pay per year, for everyone"),
+      current_tool: z.string().max(200).optional().describe("What you use or pay for today"),
+      integrations: z.string().max(300).optional().describe("What it has to connect to"),
+    })
+    .strict()
+    .optional(),
+});
+
 export function zodMessage(err: z.ZodError): string {
   return err.issues.slice(0, 3).map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
 }

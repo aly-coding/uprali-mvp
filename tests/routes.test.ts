@@ -99,7 +99,7 @@ describe("MCP server", () => {
 
   it("lists its tools", async () => {
     const r = await call({ jsonrpc: "2.0", id: 1, method: "tools/list" });
-    expect(r.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(["build_vs_buy", "list_decisions", "verify_decision"]);
+    expect(r.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(["build_vs_buy", "list_decisions", "suggest_tools", "verify_decision"]);
   });
 
   it("keeps an agent's decisions per API key and lists only that key's", async () => {

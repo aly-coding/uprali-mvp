@@ -55,7 +55,7 @@ export interface FlipPoint {
 export interface ModelUse {
   provider: "nearai" | "anthropic" | "demo";
   model: string;
-  task: "extract" | "narrate";
+  task: "extract" | "narrate" | "advise";
   private: boolean;
   fallbackFrom?: string;
 }

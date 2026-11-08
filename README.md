@@ -71,10 +71,11 @@ curl -s -X POST localhost:3000/api/v1/build-vs-buy \
 | `POST /api/v1/decisions/verify` | Checks a `snapshot` or a `fingerprint` against the ledger | No |
 | `GET /api/v1/decisions` | Past decisions made with this API key, newest first (`?limit=`, `?decision_id=` for one decision's versions) | Yes |
 | `GET /api/v1/decisions/{id}` | One past decision in full: memo, the numbers it was given, snapshot | Yes |
+| `POST /api/v1/advise` | Suggests existing tools that may cost less. Body: `question`, `answers` (`must_haves`, `seats`, `budget_per_year`, `current_tool`, `integrations`). Every suggestion is labelled "Suggestion, verify". `GET` lists the questions | Yes |
 | `GET /api/sample` | The sample decision for judges, already recorded | No |
 | `GET /api/attestation` | Fetches NEAR AI Cloud's attestation report with a fresh nonce and checks it | No |
 | `GET /api/config` | Shows what's configured, never a secret | No |
-| `/mcp` | MCP server with `build_vs_buy`, `verify_decision` and `list_decisions` | Yes |
+| `/mcp` | MCP server with `build_vs_buy`, `suggest_tools`, `verify_decision` and `list_decisions` | Yes |
 
 `POST /api/v1/build-vs-buy` and the MCP `build_vs_buy` tool also take `parent_id`: the run id of an earlier decision, to re-run it with changed numbers as its next version. Agent history is kept per API key, so it needs `UPRALI_API_KEYS` set; with an open API nothing is kept.
 
@@ -107,6 +108,13 @@ An extra on top of the hackathon build: people type `/uprali` and a build or buy
 4. Open `/slack` again and press **Add to Slack**, then **Allow**. **You should see** "Added to" your workspace's name.
 5. In any channel type `/uprali help`, then the example CRM question.
 6. To let other workspaces install it: in the Slack app, open **Manage Distribution**, tick the checklist and press **Activate Public Distribution**. Then anyone can use the **Add to Slack** button on `/slack`.
+
+## Advice and voice
+
+- **The form.** Numbers are grouped: **Buy an existing tool** (which product and plan, its yearly subscription for every seat, setup, price rises, admin time) and **Build it yourself** (prototype, engineer cost, integrations, upkeep), with a line under each box saying what goes in it.
+- **Advice before you decide.** Press **Not sure what to buy? Get advice first** and answer five questions: what it must do, how many people use it, the budget, what you use today and what it must connect to. Uprali suggests two to four existing tools that may cover that for less, cheapest first, with a rough price per seat, what each covers and what it may not. The model runs privately on NEAR AI Cloud when it's set up; with no model it uses a rough built-in list.
+- **Suggestions are never facts.** Every suggested tool, price and line of advice carries a **Suggestion, verify** tag. Press **Compare this one** to fill the buy fields with it; those numbers go into the memo as the agent's, with the same tag and the source "verify the price on the vendor's site". Typing over a field makes it yours again.
+- **Voice.** A mic button on the decision box and on each advisor question uses the browser's own speech recognition (Chrome, Edge, Safari). **Read it aloud** reads the memo's 30-second version. Agents get the same advice through the MCP tool `suggest_tools`.
 
 ## Decision history
 
@@ -219,7 +227,7 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 74 tests, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the sample decision's Match and No match, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 84 tests, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the sample decision's Match and No match, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
 **Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's faucet request and contract deploy, the sample decision recorded on testnet, a wallet's sign-in message for history, and the Slack app against real Slack. Run the demo script once on the live deploy before recording the video.
 
