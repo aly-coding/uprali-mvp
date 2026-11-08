@@ -1,0 +1,21 @@
+{
+  "schema": "uprali.decision.v1",
+  "kind": "decision",
+  "caseId": "UP-SAMPLE-ACME-CRM",
+  "caseTitle": "Acme Analytics: build our own CRM or keep HubSpot? (fictional)",
+  "caseVersion": 7,
+  "templateId": "build_vs_buy",
+  "decidedAt": "2026-11-08T10:00:00.000Z",
+  "decision": "Buy HubSpot Starter",
+  "approvers": ["Dana Reyes (CFO, fictional)"],
+  "assumptions": [
+    { "key": "buy_annual_cost", "value": 720, "source": "Stated by the user", "confidence": "medium", "filledBy": "You" },
+    { "key": "buy_setup_cost", "value": 0, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
+    { "key": "build_weeks", "value": 2, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
+    { "key": "engineer_weekly_cost", "value": 4000, "source": "Analyst benchmark", "confidence": "low", "filledBy": "NEAR AI (zai-org/GLM-5.1-FP8)" },
+    { "key": "horizon_years", "value": 3, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
+    { "key": "maintenance_pct", "value": 20, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
+    { "key": "option_name", "value": "HubSpot Starter", "source": "Stated by the user", "confidence": "high", "filledBy": "You" }
+  ],
+  "modelsUsed": ["NEAR AI (zai-org/GLM-5.1-FP8)"]
+}
