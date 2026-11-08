@@ -11,7 +11,8 @@
     "contract:test": "cd contract && cargo test",
     "contract:build": "bash scripts/build-contract.sh",
     "contract:deploy": "node scripts/deploy-contract.mjs",
-    "attest": "node scripts/attest-check.mjs"
+    "attest": "node scripts/attest-check.mjs",
+    "measure": "vitest run --config scripts/measure.config.mts --reporter=verbose"
   },
   "license": "MIT",
   "dependencies": {

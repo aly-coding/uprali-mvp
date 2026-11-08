@@ -78,7 +78,7 @@ export async function saveBotToken(team: string, token: string, env: Env = proce
     await (await store(env)).set(team, sealed);
     return true;
   } catch (err) {
-    console.error("slack token save failed:", err instanceof Error ? err.message.slice(0, 80) : "unknown");
+    console.error("slack token save failed:", errorCode(err));
     return false;
   }
 }
@@ -90,7 +90,14 @@ export async function botToken(team: string, env: Env = process.env): Promise<st
     const token = sealed ? openToken(sealed, env) : null;
     if (token) return token;
   } catch (err) {
-    console.error("slack token read failed:", err instanceof Error ? err.message.slice(0, 80) : "unknown");
+    console.error("slack token read failed:", errorCode(err));
   }
   return env.SLACK_BOT_TOKEN?.startsWith("xoxb-") ? env.SLACK_BOT_TOKEN : null;
+}
+
+/** Only an error's code or type is logged, never its message, which can quote stored values. */
+function errorCode(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(code)) return code;
+  return err instanceof Error ? err.name : "unknown";
 }

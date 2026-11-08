@@ -36,6 +36,21 @@ AI investment keeps **cash** apart from **freed-up time**. Time saved only count
 
 The models only read the numbers stated in the question and write the prose. Code works out every figure. Scenarios move only the key drivers by 20% in each direction; assumptions stay as they are. Every case memo is fingerprinted, recorded, kept in history and verified the same way as build vs buy.
 
+## Measured on the example cases
+
+Run `npm run measure` to get these yourself. It runs each template's example question (the one in the app's box) 20 times and reads the memo. Measured on Nov 8, 2026, on the build machine, with the **built-in analyst**, because that machine can't reach NEAR AI Cloud. With `NEARAI_API_KEY` set the same command measures the live NEAR AI path (3 runs each).
+
+| Template | Median time, question to memo | Numbers in the memo | With a source and owner | Flagged **needs a human** | Labelled benchmarks |
+|---|---|---|---|---|---|
+| Buy vs Build | about 2 ms | 30 | 30 | 2 | 17 |
+| Launch a new product | under 1 ms | 11 | 11 | 3 | 8 |
+| Go-to-market expansion | under 1 ms | 11 | 11 | 1 | 8 |
+| AI investment ROI | under 1 ms | 13 | 13 | 1 | 8 |
+
+- **Every number has a source and an owner:** 65 of 65 across the four cases.
+- **What it refuses to guess** on the examples: the cost of an engineer-week and the value lost on the core product (Buy vs Build); growth in new customers, the cost to acquire a customer and the team to run it (new product); setup cost (go-to-market); the share of saved time that becomes cash (AI ROI). Each memo comes back as a **draft** until a person fills those in.
+- The times are the engine's own work. A run on NEAR AI Cloud adds the model calls on top, and that hasn't been measured yet.
+
 ## For judges
 
 The live app uses **NEAR wallet sign-in**, so each decision you make is saved to your history and recorded on NEAR under your own account.
@@ -51,7 +66,7 @@ The live app uses **NEAR wallet sign-in**, so each decision you make is saved to
 1. Open [wallet.near.org](https://wallet.near.org) and pick **Intear Wallet** (Meteor works too).
 2. Switch the wallet to **testnet** and create a name that ends in **.testnet**.
 3. Save the recovery phrase it shows you.
-4. Come back to Uprali and press **Sign in with NEAR wallet**.
+4. Come back to Uprali and press **Connect NEAR wallet**.
 
 The app spots a `.near` account at sign-in and shows the same steps. If something doesn't work, `/api/health` lists what's set up on the server (setting names only, never values).
 
@@ -60,13 +75,13 @@ The app spots a `.near` account at sign-in and shows the same steps. If somethin
 Needs Node 22.18 or later.
 
 1. Run `npm install`, then `npm run dev`. **You should see** `Ready` and http://localhost:3000.
-2. Open http://localhost:3000 and press **Continue in demo mode**. (With the ledger contract configured you'd see **Sign in with NEAR wallet** too.)
+2. Open http://localhost:3000 and press **Continue in demo mode**. (This shows only when running locally. The live site always starts with **Connect NEAR wallet**.)
 3. Pick **Build vs buy**, leave the example question in the box and press **Run the decision**. **You should see** **Buy HubSpot Starter**, the line "A working prototype costs about $12,000, but it's only 20% of the work", a 3-year cost breakdown, and a table where every number has **Human** or **Agent**, **Fact** or **Assumption**, and its source.
 4. Press **Record decision**. **You should see** "Recorded on the local demo ledger" and a **Verify this decision** link.
 5. Open the link. **You should see** **Match**. Download the snapshot, change one number in it, paste it in and press **Check**. **You should see** **No match**.
 6. Open **History**. **You should see** that decision, with **Recorded**. Open it and press **Re-run with new numbers**: the next run is saved as version 2.
 7. Press **+ New case**, pick **AI investment ROI** and press **Build the case**. **You should see** **Pilot first**, the owner cards with their formulas, and the model in the panel on the right.
-8. Run `npm test`. **You should see** `Tests  104 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
+8. Run `npm test`. **You should see** `Tests  107 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
 
 ### The same tool from an agent (MCP)
 
@@ -211,11 +226,20 @@ The memo then runs the CFO funding check (reduces a major cost driver, protects 
 
 ## Privacy
 
-| What | Where it goes |
-|---|---|
-| The question and the numbers | To the model for one request (NEAR AI Cloud's enclave by default). The model keeps nothing. The server logs only error types. |
-| The memo and the snapshot | Returned to the caller, and kept in the owner's history (memo, the numbers given, snapshot, fingerprint) so it can be opened and re-run. Only the owner can list or open it. No chat transcripts are kept. |
-| On chain | Only the SHA-256 fingerprint, the kind (`decision`), the decision id, the version, the signer's account and the block time. |
+What Uprali keeps, and where. The code was checked against this list (see the files named).
+
+| What | Where it goes | Kept? |
+|---|---|---|
+| The question and the numbers | Sent for one request to the analyst model: by default **NEAR AI Cloud**, inside an attested Intel TDX and NVIDIA GPU enclave (`src/lib/engine/providers.ts`). | Not by the Uprali server's model calls. Uprali keeps no prompt or model reply on its own. |
+| If NEAR AI is down | Only if `ANTHROPIC_API_KEY` is set, the same request goes to Claude instead. The memo then says which model ran and the badge does **not** say Verified. With neither key, the built-in analyst runs on the server and nothing leaves it. | Same as above. |
+| The memo, the question, the numbers given, the snapshot and fingerprint | **Postgres** (`src/lib/history.ts`), so the owner can open and re-run a decision. | Yes, until the owner deletes it. Only the owner can list or open it: the NEAR account that signed in (NEP-413 signed message), or before sign-in this browser's random cookie id, the Slack user, or the API key. |
+| On chain (NEAR testnet) | Only the SHA-256 fingerprint, the kind (`decision`), the decision id, the version, the signer's account and the block time (`contract/`). | Yes, for good. No numbers or text from the memo. The decision id is a random one like `UP-20261108-3fa9c1d2`, unless an API caller sets its own. |
+| Server logs | Only error types and codes, never messages, questions or numbers (`src/lib/service.ts`, `src/lib/history.ts`). | Vercel's own request logs (address, path, status). The rate limit keeps request times per IP address in memory for a few minutes (`src/lib/ratelimit.ts`). |
+| In your browser | The snapshot of a decision you ran, so **Verify** can check it (`localStorage`). | Until you clear it. |
+| Slack | A Slack bot token, encrypted, if the app was installed with **Add to Slack** (`src/lib/slack/tokens.ts`). The decision's state lives in the Slack message itself. | Yes, encrypted. |
+| Voice (off by default) | Uses the browser's own speech recognition, which some browsers send to their maker's speech service. Off unless `NEXT_PUBLIC_UPRALI_VOICE=on`. | Not by Uprali. |
+
+Uprali keeps no chat transcripts. Unlike a stateless demo, it does keep decision history on the server, because a decision someone approved has to be opened again later. That history is visible only to its owner, and deleting a decision removes it from the database (its fingerprint stays on NEAR, which reveals nothing about it).
 
 **NEAR AI Cloud attestation** (`src/lib/attest.ts`). Uprali asks NEAR AI Cloud for its attestation report with a fresh random nonce and checks five things: the report is for the model in use, it echoes the nonce (so it isn't replayed), it contains an Intel TDX quote, the quote's report data binds the enclave's signing key and the nonce, and NVIDIA GPU evidence is present and bound to the same nonce. **Not checked here:** the Intel and NVIDIA signature chains themselves, and whether the enclave's code hash is one you expect. Those need Intel's and NVIDIA's own verification services. The badge says **Verified** only when all five checks pass and the model really was NEAR AI.
 
@@ -237,20 +261,39 @@ You don't need to touch code. Each step is a few clicks; the terminal steps can 
 2. **NEAR AI Cloud key.** Sign up at NEAR AI Cloud and create an API key. Keep it to yourself: you'll paste it into Vercel in step 5, never into a chat.
 3. **A NEAR testnet wallet for you.** Done: you made `uprali.testnet` in Intear Wallet. Meteor Wallet also works on testnet. It doesn't need any testnet NEAR: it only signs in and becomes the ledger's owner.
 4. **The ledger, from your browser (2 minutes, no terminal, no testnet NEAR).** Open the live app at `/setup`.
-   - Press **Sign in with NEAR wallet** and sign in as `uprali.testnet`, or just type `uprali.testnet` in **Owner account**.
+   - Press **Connect NEAR wallet** and sign in as `uprali.testnet`, or just type `uprali.testnet` in **Owner account**.
    - Press **Create the ledger**. There's nothing to approve: NEAR's testnet faucet service (the one `near-cli`'s `sponsor-by-faucet-service` uses, no CAPTCHA) creates and funds two new accounts, `uprali-ledger-<code>.testnet` for the contract and `uprali-relayer-<code>.testnet` for recording. Our server passes on only their public keys; the keys themselves are made in your browser and never leave it.
    - The page then puts the contract on the ledger account and deletes its only key, so nobody can change it. It swaps the relayer's key for one that can only record decisions, with up to 1 NEAR of fees.
    - If it stops partway, press the button again; it picks up where it stopped.
    - **You should see** six lines to copy. Press **Copy all six**.
 5. **Vercel.** In the Vercel project, open **Settings → Environment Variables**, click into the first **Key** box and paste: Vercel splits the six lines into six rows (`NEAR_NETWORK`, `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `RECORD_ACCESS_CODE`, `UPRALI_API_KEYS`). Under **Environments**, tick **Production** and **Preview**, then press **Save**. `NEARAI_API_KEY` from step 2 should already be there. `ANTHROPIC_API_KEY` is optional, so Claude can step in if NEAR AI is down.
 
-   Then open **Deployments**, open the menu on the top one and press **Redeploy**. Back on `/setup`, press **I've saved them in Vercel**. Open the app: you should see **Sign in with NEAR wallet**, and `/api/config` should list `nearai` first.
+   Then open **Deployments**, open the menu on the top one and press **Redeploy**. Back on `/setup`, press **I've saved them in Vercel**. Open the app: you should see step 1, **Connect NEAR wallet**, and `/api/config` should list `nearai` first.
 
-   `RECORD_ACCESS_CODE` is the fallback for a live demo: if a wallet won't sign in, press **Continue in demo mode**, type that code next to **Record decision**, and the relayer records it on testnet. `UPRALI_API_KEYS` is the key agents use for `/mcp` and `/api/v1`.
+   `RECORD_ACCESS_CODE` is the fallback for a live demo: if a wallet won't sign in, run the decision, open **Have the demo access code instead?** under the result, type the code and the relayer records it on testnet. `UPRALI_API_KEYS` is the key agents use for `/mcp` and `/api/v1`.
 
    For engineers: `npm run contract:deploy` does the same from a terminal with your own testnet key.
 6. **Database for the history (3 minutes).** In the Vercel project, open the **Storage** tab, press **Create Database** (or **Browse Marketplace**), pick **Neon** (or **Supabase**) on the free plan, and connect it to this project for **Production** and **Preview**. Vercel adds the database address as an environment variable by itself. Then **Redeploy**. **You should see** on the **History** page: "Saved in this app's database." Nothing else to set: the app makes its own table.
 7. **Submit.** Post the demo video on X, then submit the repo, the live link and the post in the hackathon form before **Nov 14, 2026 at 23:59 UTC (3:59 PM Pacific)**.
+
+## Plan
+
+- **Who buys it.** Finance teams and CFOs who have to approve AI and agent spending: tools, seats, vendors and build time. Next to them, the people who ask for that spend (product managers, engineers, team leads), so every request reaches Finance as a checkable memo.
+- **How people find it.** A free plugin inside the AI assistants teams already use (Claude and ChatGPT), with one free template. It signs in to an Uprali account with a work email, and the first 30 days are free with every template.
+- **Paid tiers.**
+  - **Basic:** the 3 main templates and a monthly number of decisions. Price: **[PRICE: Aly to fill in]**.
+  - **Executive:** priced per seat, with every template, integrations and unlimited decisions. Price: **[PRICE: Aly to fill in]**.
+  - **Enterprise:** sales-led, starting from a demo, set up around the customer's own approval rules.
+- **Traction so far.** **[NUMBER: Aly to fill in]** customer interviews and **[NUMBER: Aly to fill in]** design partners.
+- **Next on NEAR.** Settle approved spend with **NEAR Intents**: an agent's payment carries the fingerprint of the decision that approved it, so Finance can see that every payment was approved, and by whom.
+
+## Built with
+
+- **Libraries:** Next.js 16 and React 19, TypeScript, near-api-js and `@near-js/*` for NEAR, NEAR Wallet Selector with Intear and Meteor wallets, the Anthropic SDK for the Claude fallback, the MCP server SDK and `mcp-handler`, `postgres` for history, `zod` for input checks, and Vitest for tests. The ledger contract uses `near-sdk` 5.5 in Rust. Full list in `package.json` and `contract/Cargo.toml`.
+- **NEAR services:** NEAR AI Cloud for private inference and its attestation report, NEAR testnet RPC, and NEAR's testnet faucet service for the no-terminal setup.
+- **AI-written code:** most of the code, tests and this README were written with Claude Code (Anthropic), directed and reviewed by the Uprali team. The decision rules come from Uprali's own build vs buy and ROI playbooks. The app's look follows a design mock-up the team made in Lovable; no Lovable code is in this repo.
+- **Baseline:** none. The repo starts on Nov 8, 2026, during the hackathon; no code from before Nov 1 was brought in.
+- **Secrets:** none in the repo or its history. Keys live only in the host's environment variables (see `.env.example`, which has names only). The full git history was searched for private keys, API keys, Slack tokens and database passwords on Nov 8; the only matches are fake values in tests.
 
 ## Environment variables
 
@@ -300,4 +343,4 @@ scripts/             contract build and deploy, attestation check
 samples/             fictional example data
 ```
 
-MIT licensed.
+MIT licensed: see [LICENSE](LICENSE).

@@ -391,7 +391,7 @@ export async function saveQuietly(entry: HistoryEntry, env: Env = process.env): 
     await (await getHistory(env)).save(entry);
     return true;
   } catch (err) {
-    console.error("history save failed:", err instanceof Error ? err.message.slice(0, 120) : "unknown");
+    console.error("history save failed:", errorCode(err));
     return false;
   }
 }
@@ -401,6 +401,13 @@ export async function markRecordedQuietly(fingerprint: string, recorded: Recorde
   try {
     await (await getHistory(env)).markRecorded(fingerprint, recorded);
   } catch (err) {
-    console.error("history update failed:", err instanceof Error ? err.message.slice(0, 120) : "unknown");
+    console.error("history update failed:", errorCode(err));
   }
+}
+
+/** Only an error's code or type is logged, never its message, which can quote stored values. */
+function errorCode(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(code)) return code;
+  return err instanceof Error ? err.name : "unknown";
 }
