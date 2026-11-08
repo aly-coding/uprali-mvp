@@ -1,13 +1,16 @@
-# Uprali: business decisions, decided with proof
+# Uprali: the verifiable approval layer for agent spending
 
 **Live app:** LIVE-APP-LINK (add the link) · **Demo video:** DEMO-VIDEO-LINK (add the link) · **Built for:** NEAR Hackathon, Privacy & Private AI track
 
 > **Judging? 30 seconds, no wallet.** Open the live app's **/sample** page. Read a real decision memo where every number shows its source and owner, with the NEAR AI Cloud **Verified** badge. Press **Verify it yourself**: the page works out the fingerprint in your browser and finds it recorded on NEAR testnet (**Match**). Then press **Try to cheat: make building $50,000 cheaper** and watch it turn into **No match**.
 
-Uprali is a private AI financial analyst for one decision teams get wrong all the time: **should we build this tool ourselves, or keep paying for one?**
+**Uprali is the verifiable approval layer for agent spending.** Before an agent buys a tool or builds one, it asks Uprali. Uprali gives it a decision memo where every number has a source and an owner, waits for a person to sign off, and records a proof of the decision on NEAR. The analysis runs privately on **NEAR AI Cloud**, so company finances never leave a verified enclave.
 
-A working prototype makes building look cheap. It's usually about 20% of the real job. Uprali works out the full multi-year cost of building, including production hardening, integrations, upkeep, security, hosting, on-call, the knowledge lost when the builder leaves, and the core product work that doesn't get done. Then it sets that against the full cost of buying.
+Agents are starting to spend company money: subscriptions, seats, vendors, build time. Finance teams can't approve what they can't check. Uprali makes each spend decision checkable: what the numbers were, who stood behind each one, who approved it, and proof that nothing changed afterwards.
 
+The first decision it covers in depth is the one teams get wrong all the time: **should we build this tool ourselves, or keep paying for one?** A working prototype makes building look cheap. It's usually about 20% of the real job. Uprali works out the full multi-year cost of building, including production hardening, integrations, upkeep, security, hosting, on-call, the knowledge lost when the builder leaves, and the core product work that doesn't get done. Then it sets that against the full cost of buying.
+
+- **Memo, sign-off, proof.** An agent calls the `build_vs_buy` or `business_case` tool and gets a memo. Anything only a person can answer is marked **needs a human**, and a decision that still needs a human can't be recorded. A person approves it, and its fingerprint goes on NEAR with the approver's name in it.
 - **Every number has a source and an owner.** Each figure in the memo says where it came from, whether a person or an agent stands behind it, and whether it's a fact or an assumption. Anything only a person can answer is marked **needs a human**.
 - **The model runs privately.** By default the analyst runs on **NEAR AI Cloud** inside a hardware enclave. Uprali checks the enclave's attestation with a fresh nonce and shows a **Verified** badge. Claude is the fallback. A built-in rule-based analyst means it works with no keys at all.
 - **The decision is provable.** Only a SHA-256 fingerprint of the decision goes on **NEAR testnet**, signed by the decision maker's own NEAR wallet. Anyone with the decision file can later prove nothing in it changed.
@@ -15,6 +18,8 @@ A working prototype makes building look cheap. It's usually about 20% of the rea
 - **Every decision is kept.** The **History** page lists past decisions with their date, question, recommendation and proof. Open one to see the full memo, or re-run it with changed numbers as a new version of the same decision.
 
 - **Five decision templates.** Build vs buy is the deepest. Four business cases sit beside it: **Launch a new product**, **Add a feature**, **Go-to-market expansion** and **AI investment ROI**. Each groups its drivers into the cards of the people who own them (Product, Sales, Finance and so on), each card shows its formula, and each case gets a 3-year model with **Model**, **Unit Economics**, **Summary P&L** and **Scenarios** tabs, plus net present value, return on investment and payback.
+
+**Next step:** settle approved spend with **NEAR Intents**, so the payment an agent makes is tied to the decision that approved it.
 
 Built for the NEAR Hackathon, **Privacy & Private AI** track.
 

@@ -267,11 +267,11 @@ export function DecideApp() {
       <main className="page narrow">
         <section className="card signin hero">
           <span className="ai-mark big" aria-hidden>U</span>
-          <h1>What business decision are you trying to make?</h1>
+          <p className="eyebrow">The verifiable approval layer for agent spending</p>
+          <h1>Before an agent buys or builds anything, Uprali checks the numbers.</h1>
           <p>
-            Uprali is a private AI financial analyst. Pick a template (build or buy, launch a product or a feature, expand into a new market, or invest in AI)
-            and it builds a three-year business case where every number shows where it came from and who stands behind it. The model runs privately on NEAR AI
-            Cloud, and the decision&apos;s fingerprint goes on NEAR.
+            Every spend decision gets a memo where each number shows its source and owner, a human sign-off, and a proof on NEAR. The analysis runs
+            privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product or a feature, expand into a new market, or invest in AI.
           </p>
           <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
           {config.wallet ? (

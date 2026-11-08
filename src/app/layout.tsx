@@ -3,8 +3,8 @@ import "@near-wallet-selector/modal-ui/styles.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Uprali: business decisions, decided with proof",
-  description: "A private AI financial analyst for build vs buy, new products, features, go-to-market and AI investments. Every number shows its source and owner; every decision's fingerprint is recorded on NEAR.",
+  title: "Uprali: the verifiable approval layer for agent spending",
+  description: "Before an agent buys or builds anything, it gets a memo with sourced numbers, a human sign-off and a proof on NEAR. Private inference on NEAR AI Cloud.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="topbar">
           <a href="/" className="brand">
             <span className="logo" aria-hidden>U</span>
-            Uprali <span className="muted">AI financial analyst</span>
+            Uprali <span className="muted">Approvals for agent spending</span>
           </a>
           <nav>
             <a href="/">Decide</a>
