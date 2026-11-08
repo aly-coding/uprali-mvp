@@ -7,7 +7,7 @@
  * Every read and write is scoped to an owner: a NEAR account that proved itself with a signed
  * message, a browser, a Slack user or an API key. Nobody can list or open someone else's runs.
  */
-import type { DecisionSnapshot } from "./engine/snapshot";
+import type { AnyMemo, DecisionSnapshot } from "./engine/snapshot";
 import type { GivenValue, Memo } from "./engine/types";
 import type { RecordResult } from "./ledger";
 
@@ -41,7 +41,7 @@ export interface HistoryEntry {
   verifyUrl: string;
   recorded: RecordedInfo | null;
   inputs: Record<string, GivenValue>;
-  memo: Memo;
+  memo: AnyMemo;
   snapshot: DecisionSnapshot;
 }
 
@@ -90,7 +90,7 @@ export function makeEntry(args: {
   source: HistorySource;
   parentId?: string | null;
   inputs: Record<string, GivenValue | undefined>;
-  memo: Memo;
+  memo: AnyMemo;
   snapshot: DecisionSnapshot;
   fingerprint: string;
   verifyUrl: string;
@@ -315,7 +315,7 @@ export class PostgresHistory implements HistoryStore {
     const sql = this.sql;
     const [r] = await sql<Row[]>`select * from ${sql(TABLE)} where id = ${id} and owner = ${owner}`;
     if (!r) return null;
-    return { ...fromRow(r), inputs: r.inputs ?? {}, memo: r.memo as Memo, snapshot: r.snapshot as DecisionSnapshot };
+    return { ...fromRow(r), inputs: r.inputs ?? {}, memo: r.memo as AnyMemo, snapshot: r.snapshot as DecisionSnapshot };
   }
 
   async remove(owner: string, id: string) {

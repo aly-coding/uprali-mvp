@@ -9,7 +9,7 @@ const pct = (n: number | null) => (n === null ? "—" : `${Math.round(n * 1000) 
 const money = (n: number | null) => (n === null ? "—" : usd(n));
 const yesNo = (b: boolean | null) => (b === null ? "?" : b ? "✓" : "✗");
 
-function Badges({ i }: { i: Input }) {
+export function Badges({ i }: { i: Input }) {
   if (i.value === null && !i.needsHuman) return <span className="badges"><span className="badge optional">Optional</span></span>;
   return (
     <span className="badges">
@@ -24,7 +24,7 @@ function Badges({ i }: { i: Input }) {
   );
 }
 
-export function PrivateAiBadge({ memo }: { memo: Memo }) {
+export function PrivateAiBadge({ memo }: { memo: Pick<Memo, "privateAi" | "modelsUsed"> }) {
   const p = memo.privateAi;
   const a = p.attestation;
   const verified = p.privateInference && a?.verified;

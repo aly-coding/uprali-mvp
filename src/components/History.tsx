@@ -5,6 +5,8 @@ import type { Memo } from "@/lib/engine/types";
 import type { DecisionSnapshot } from "@/lib/engine/snapshot";
 import type { RecordedInfo } from "@/lib/history";
 import { MemoView, PrivateAiBadge } from "./MemoView";
+import { CaseMemoView } from "./CaseView";
+import type { CaseMemo } from "@/lib/engine/caseDecide";
 import { confirmHistorySignIn, endHistorySession, initWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
 
 interface Summary {
@@ -25,7 +27,7 @@ interface Summary {
 }
 
 interface Entry extends Summary {
-  memo: Memo;
+  memo: Memo | CaseMemo;
   snapshot: DecisionSnapshot;
 }
 
@@ -216,7 +218,7 @@ export function History() {
               </p>
               {entry.question && <p className="spoken">“{entry.question}”</p>}
               <PrivateAiBadge memo={entry.memo} />
-              <MemoView memo={entry.memo} />
+              {entry.memo.schema === "uprali.case.v1" ? <CaseMemoView memo={entry.memo} /> : <MemoView memo={entry.memo} />}
             </section>
             <section className="card ask">
               <h2>Proof</h2>

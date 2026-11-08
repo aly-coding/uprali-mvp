@@ -5,6 +5,9 @@ import { FIELDS, FIELD_GROUPS, type FieldGroup } from "@/lib/engine/buildVsBuy";
 import { SUGGESTION_SOURCE, type ToolSuggestion } from "@/lib/engine/advisorShared";
 import { canonicalJson, sha256Hex, type DecisionSnapshot } from "@/lib/engine/snapshot";
 import type { Memo } from "@/lib/engine/types";
+import type { CaseMemo } from "@/lib/engine/caseDecide";
+import { CASE_TEMPLATES, isCaseTemplate, type TemplateId } from "@/lib/engine/cases";
+import { CaseForm, CaseMemoView, TemplatePicker } from "./CaseView";
 import { MemoView, PrivateAiBadge } from "./MemoView";
 import { Advisor } from "./Advisor";
 import { MicButton, ReadAloud, appendSpoken } from "./Voice";
@@ -21,11 +24,13 @@ interface Config {
 interface Result {
   runId: string | null;
   parentId: string | null;
-  memo: Memo;
+  memo: Memo | CaseMemo;
   snapshot: DecisionSnapshot;
   fingerprint: string;
   verifyUrl: string;
 }
+
+const fieldsOf = (t: TemplateId) => (isCaseTemplate(t) ? CASE_TEMPLATES[t].drivers : FIELDS);
 
 interface Recorded {
   by: string;
@@ -54,6 +59,7 @@ export function DecideApp() {
   const [wallet, setWallet] = useState<WalletHandle | null>(null);
   const [account, setAccount] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
+  const [template, setTemplate] = useState<TemplateId>("build_vs_buy");
   const [question, setQuestion] = useState(EXAMPLE);
   const [values, setValues] = useState<Record<string, string>>({});
   const [more, setMore] = useState(false);
@@ -80,7 +86,9 @@ export function DecideApp() {
         .then(async (r) => {
           const data = await r.json();
           if (!r.ok) throw new Error(data.error || "Couldn't load that decision.");
-          const d = data.decision as { id: string; version: number; title: string; question: string; inputs: Record<string, { value?: unknown }> };
+          const d = data.decision as { id: string; version: number; title: string; question: string; inputs: Record<string, { value?: unknown }>; snapshot?: { template?: string } };
+          const t = d.snapshot?.template;
+          if (isCaseTemplate(t)) setTemplate(t);
           const top = Math.max(d.version, ...((data.versions as { version: number }[]) || []).map((v) => v.version));
           setParent({ id: d.id, version: top, title: d.title });
           setQuestion(d.question || "");
@@ -90,7 +98,7 @@ export function DecideApp() {
             if (raw !== null && raw !== undefined && (typeof raw === "number" || typeof raw === "string")) vals[k] = String(raw);
           }
           setValues(vals);
-          if (Object.keys(vals).some((k) => !MAIN_FIELDS.includes(k))) setMore(true);
+          if (isCaseTemplate(t) || Object.keys(vals).some((k) => !MAIN_FIELDS.includes(k))) setMore(true);
           setDemo(true);
         })
         .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load that decision."));
@@ -135,6 +143,19 @@ export function DecideApp() {
     setSuggested(marks);
   }
 
+  function pick(t: TemplateId) {
+    if (t === template) return;
+    setTemplate(t);
+    setQuestion(t === "build_vs_buy" ? EXAMPLE : CASE_TEMPLATES[t].prompt);
+    setValues({});
+    setSuggested({});
+    setResult(null);
+    setRecorded(null);
+    setParent(null);
+    setMore(false);
+    setError("");
+  }
+
   async function run() {
     setBusy("deciding");
     setError("");
@@ -144,7 +165,7 @@ export function DecideApp() {
     for (const [k, raw] of Object.entries(values)) {
       const v = raw.trim();
       if (!v) continue;
-      const f = FIELDS.find((x) => x.key === k);
+      const f = fieldsOf(template).find((x) => x.key === k);
       const n = Number(v.replace(/[$,\s]/g, ""));
       const value = f?.unit === "text" || !Number.isFinite(n) ? v : n;
       inputs[k] = suggested[k]
@@ -155,7 +176,7 @@ export function DecideApp() {
       const res = await fetch("/api/app/decide", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question, inputs, decided_by: who, ...(parent ? { parent_id: parent.id } : {}) }),
+        body: JSON.stringify({ template, question, inputs, decided_by: who, ...(parent ? { parent_id: parent.id } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "The analyst couldn't run.");
@@ -289,6 +310,7 @@ export function DecideApp() {
       <div className="layout">
         <section className="card ask">
           <h2>The decision</h2>
+          <TemplatePicker value={template} onPick={pick} compact />
           {parent && (
             <p className="small">
               Re-running <strong>{parent.title}</strong>. The result is saved as a new version; <a href={`/history?id=${encodeURIComponent(parent.id)}`}>the earlier one</a> stays as it was.
@@ -299,39 +321,47 @@ export function DecideApp() {
             <MicButton label="Say the decision" onText={(t) => setQuestion((q) => appendSpoken(q, t))} />
             <span className="muted small">Say or type what you know in plain words. Numbers you type below win over the text, and count as yours.</span>
           </div>
-          <Advisor question={question} onCompare={compare} />
-          {groups.map(({ g, fields }) => (
-            <fieldset key={g} className={`group ${g}`}>
-              <legend>{groupInfo(g).title}</legend>
-              <p className="muted small">{groupInfo(g).blurb}</p>
-              <div className="fields">
-                {fields.map((f) => (
-                  <label key={f.key}>
-                    <span>
-                      {f.label}
-                      {suggested[f.key] && <span className="badge suggest">Suggestion, verify</span>}
-                    </span>
-                    <input
-                      className="input"
-                      placeholder={typeof f.benchmark === "number" ? `benchmark ${f.benchmark}` : f.unit === "text" ? "" : "unknown"}
-                      value={values[f.key] ?? ""}
-                      onChange={(e) => {
-                        setValues({ ...values, [f.key]: e.target.value });
-                        if (suggested[f.key]) {
-                          const rest = { ...suggested };
-                          delete rest[f.key];
-                          setSuggested(rest);
-                        }
-                      }}
-                      title={f.ask}
-                    />
-                    {f.help && <small className="help">{f.help}</small>}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ))}
-          <button className="link" onClick={() => setMore(!more)}>{more ? "Fewer numbers" : "More numbers (upkeep, security, on-call, turnover…)"}</button>
+          {isCaseTemplate(template) ? (
+            <CaseForm template={template} values={values} more={more} onChange={(k, v) => setValues({ ...values, [k]: v })} />
+          ) : (
+            <>
+            <Advisor question={question} onCompare={compare} />
+            {groups.map(({ g, fields }) => (
+              <fieldset key={g} className={`group ${g}`}>
+                <legend>{groupInfo(g).title}</legend>
+                <p className="muted small">{groupInfo(g).blurb}</p>
+                <div className="fields">
+                  {fields.map((f) => (
+                    <label key={f.key}>
+                      <span>
+                        {f.label}
+                        {suggested[f.key] && <span className="badge suggest">Suggestion, verify</span>}
+                      </span>
+                      <input
+                        className="input"
+                        placeholder={typeof f.benchmark === "number" ? `benchmark ${f.benchmark}` : f.unit === "text" ? "" : "unknown"}
+                        value={values[f.key] ?? ""}
+                        onChange={(e) => {
+                          setValues({ ...values, [f.key]: e.target.value });
+                          if (suggested[f.key]) {
+                            const rest = { ...suggested };
+                            delete rest[f.key];
+                            setSuggested(rest);
+                          }
+                        }}
+                        title={f.ask}
+                      />
+                      {f.help && <small className="help">{f.help}</small>}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ))}
+            </>
+          )}
+          <button className="link" onClick={() => setMore(!more)}>
+            {more ? "Fewer numbers" : isCaseTemplate(template) ? "All assumptions (churn, costs, discount rate…)" : "More numbers (upkeep, security, on-call, turnover…)"}
+          </button>
           <button className="btn primary big" onClick={run} disabled={busy !== "" || question.trim().length < 5}>
             {busy === "deciding" ? "Working it out…" : "Run the decision"}
           </button>
@@ -340,7 +370,7 @@ export function DecideApp() {
 
         <section className="card result">
           {!result ? (
-            <p className="muted">The memo appears here: the recommendation, the full {3}-year cost, and every number with its source and owner.</p>
+            <p className="muted">The memo appears here: the recommendation, the three-year numbers, and every number with its source and owner.</p>
           ) : (
             <>
               <p className="muted small">
@@ -351,7 +381,7 @@ export function DecideApp() {
                 )}
               </p>
               <PrivateAiBadge memo={result.memo} />
-              <MemoView memo={result.memo} />
+              {result.memo.schema === "uprali.case.v1" ? <CaseMemoView memo={result.memo} /> : <MemoView memo={result.memo} />}
               <p className="row"><ReadAloud text={result.memo.spoken30s} /></p>
               <div className="proof">
                 <h3>Proof on NEAR</h3>

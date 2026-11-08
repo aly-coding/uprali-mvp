@@ -144,10 +144,18 @@ export async function decide(req: DecideRequest, env: Env = process.env): Promis
   ]);
   models.push(nUse);
 
+  const privateAi = privateAiSummary(models, attest);
+
+  return { ...draft, ...narrative, modelsUsed: models, privateAi };
+}
+
+
+/** Which models ran, and whether NEAR AI Cloud served all of them inside a verified enclave. */
+export function privateAiSummary(models: ModelUse[], attest: Awaited<ReturnType<typeof attestNearAi>> | null): PrivateAiSummary {
   const privateInference = models.length > 0 && models.every((m) => m.provider === "nearai");
   const main = models[models.length - 1];
   const attestation = attest && "checks" in attest ? attest : null;
-  const privateAi: PrivateAiSummary = {
+  return {
     provider: main.provider,
     model: main.model,
     privateInference,
@@ -162,8 +170,6 @@ export async function decide(req: DecideRequest, env: Env = process.env): Promis
         ? `Ran on Claude${main.fallbackFrom ? ` after NEAR AI failed (${main.fallbackFrom})` : ""}. Not private inference.`
         : "Ran on the built-in demo analyst. No AI model and no data left this server.",
   };
-
-  return { ...draft, ...narrative, modelsUsed: models, privateAi };
 }
 
 export const FIELD_KEYS = FIELDS.map((f) => f.key);

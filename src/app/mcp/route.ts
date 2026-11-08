@@ -4,12 +4,14 @@ import { z } from "zod";
 import { isAuthorized, unauthorized } from "@/lib/auth";
 import { TEMPLATE } from "@/lib/engine/buildVsBuy";
 import { allow, clientKey } from "@/lib/ratelimit";
-import { adviseBody, cleanInputs, fieldShape } from "@/lib/schema";
+import { adviseBody, cleanInputs, fieldShape, fieldsFor, givenValue } from "@/lib/schema";
+import { CASE_TEMPLATE_IDS, type CaseTemplateId } from "@/lib/engine/cases";
+import { describeTemplates } from "@/lib/engine/templateInfo";
 import { advise, SUGGESTION_SOURCE } from "@/lib/engine/advisor";
 import { getHistory } from "@/lib/history";
 import { listFor, publicEntry } from "@/lib/historyApi";
 import { apiOwner } from "@/lib/identity";
-import { publicBaseUrl, runAndSave, verifyDecision } from "@/lib/service";
+import { publicBaseUrl, runAndSave, runCaseAndSave, verifyDecision } from "@/lib/service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -64,13 +66,66 @@ function makeHandler(base: string) {
         },
       );
       server.registerTool(
+        "list_templates",
+        {
+          title: "List decision templates",
+          description:
+            "List Uprali's decision templates: build vs buy, launch a new product, launch a new feature, go-to-market expansion and AI investment ROI. " +
+            "Each comes with its owner cards (who should stand behind which numbers), the formula on each card and every field it takes, with the question to ask " +
+            "and the benchmark used when nobody knows. Call this before business_case to know which fields to pass.",
+          inputSchema: z.object({}),
+        },
+        async () => {
+          const d = describeTemplates();
+          const lines = d.templates.map((t) => `- ${t.id} (${t.mcpTool}): ${t.title}. ${t.description} Fields: ${t.fields.map((f) => f.key).join(", ")}`);
+          return { ...text(lines.join("\n")), structuredContent: d };
+        },
+      );
+      server.registerTool(
+        "business_case",
+        {
+          title: "Three-year business case",
+          description:
+            "Build a three-year business case from a template: new_product, new_feature, gtm_expansion or ai_investment (for build vs buy, use build_vs_buy). " +
+            "The arithmetic runs in code: driver-based model by year, unit economics, summary P&L, net present value, ROI, payback, and downside and upside " +
+            "scenarios that move the key drivers 20%. For AI investment, cash is kept apart from freed-up time, and an estimated (not measured) baseline is cut " +
+            "until someone measures it. Pass what you know in inputs (field keys from list_templates), each optionally with its source and owner; anything " +
+            "missing is filled from a labelled benchmark or marked 'needs a human'. Returns the memo, owner cards and a SHA-256 fingerprint. Set record=true to " +
+            "write the fingerprint to NEAR testnet.",
+          inputSchema: z.object({
+            template: z.enum(CASE_TEMPLATE_IDS as [CaseTemplateId, ...CaseTemplateId[]]).describe("Which business case to build"),
+            question: z.string().max(4000).optional().describe("The decision in plain words, with any numbers the person gave"),
+            title: z.string().max(120).optional(),
+            inputs: z.record(z.string().max(64), givenValue).optional().describe("Known numbers by field key, from list_templates"),
+            record: z.boolean().optional().describe("Record the decision's fingerprint on NEAR testnet"),
+            approved_by: z.array(z.string().max(120)).max(10).optional(),
+            parent_id: z.string().max(64).optional().describe("Re-run an earlier decision from list_decisions; it becomes that decision's next version"),
+          }),
+        },
+        async ({ template, question, title, inputs, record, approved_by, parent_id }) => {
+          const fields = fieldsFor(template);
+          const unknown = Object.keys(inputs ?? {}).filter((k) => !fields.some((f) => f.key === k));
+          if (unknown.length) return { ...text(`Not fields of ${template}: ${unknown.join(", ")}. Call list_templates for the field keys.`), isError: true };
+          const r = await runCaseAndSave(
+            { template, question, title, record, approvedBy: approved_by, inputs: cleanInputs(inputs, fields), decidedBy: "mcp-agent" },
+            base,
+            { owner: caller.getStore()?.owner ?? null, source: "mcp", parentId: parent_id },
+          );
+          const tail = r.recordError ? `\n\n${r.recordError}` : "";
+          return {
+            ...text(r.markdown + tail),
+            structuredContent: { runId: r.runId, decisionId: r.memo.decisionId, template, version: r.snapshot.version, status: r.memo.status, recommendation: r.memo.recommendation, metrics: r.memo.metrics, scenarios: r.memo.scenarios, cards: r.memo.cards, fingerprint: r.fingerprint, verifyUrl: r.verifyUrl, recorded: r.recorded, gaps: r.memo.gaps, snapshot: r.snapshot },
+          };
+        },
+      );
+      server.registerTool(
         "verify_decision",
         {
           title: "Verify a recorded decision",
           description: "Check a decision snapshot, or just its fingerprint, against the ledger: was it recorded, by whom and when, and has it changed since.",
           inputSchema: z.object({
             fingerprint: z.string().max(64).optional().describe("64-character SHA-256 fingerprint"),
-            snapshot: z.record(z.string(), z.unknown()).optional().describe("The decision snapshot returned by build_vs_buy"),
+            snapshot: z.record(z.string(), z.unknown()).optional().describe("The decision snapshot returned by build_vs_buy or business_case"),
           }),
         },
         async ({ fingerprint, snapshot }) => {
@@ -113,7 +168,7 @@ function makeHandler(base: string) {
         {
           title: "List past decisions",
           description:
-            "List the build vs buy decisions made earlier with this API key, newest first: date, question, recommendation, version and whether " +
+            "List the decisions made earlier with this API key, any template, newest first: date, question, recommendation, version and whether " +
             "its fingerprint is recorded. Pass id to get one decision's full memo and the numbers it was given; pass decision_id to list its versions.",
           inputSchema: z.object({
             id: z.string().max(64).optional().describe("A run id from an earlier list, to get that decision in full"),

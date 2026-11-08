@@ -1,7 +1,8 @@
 import { decide, type DecideRequest } from "./engine/decide";
-import { memoToMarkdown } from "./engine/markdown";
-import { buildSnapshot, hashSnapshot, validateSnapshot, type DecisionSnapshot } from "./engine/snapshot";
-import type { Memo } from "./engine/types";
+import { caseToMarkdown, memoToMarkdown } from "./engine/markdown";
+import { decideCase, type CaseMemo, type CaseRequest } from "./engine/caseDecide";
+import { buildSnapshot, hashSnapshot, validateSnapshot, type AnyMemo, type DecisionSnapshot } from "./engine/snapshot";
+import type { GivenValue, Memo } from "./engine/types";
 import { getHistory, makeEntry, recordedFrom, saveQuietly, type HistorySource } from "./history";
 import { getLedger, LedgerError, type LedgerAnchor, type RecordResult } from "./ledger";
 
@@ -18,8 +19,8 @@ export function verifyUrl(base: string, hash: string): string {
   return `${base}/verify?hash=${hash}`;
 }
 
-export interface DecisionResult {
-  memo: Memo;
+export interface DecisionResult<M extends AnyMemo = Memo> {
+  memo: M;
   snapshot: DecisionSnapshot;
   fingerprint: string;
   markdown: string;
@@ -28,12 +29,10 @@ export interface DecisionResult {
   recordError: string | null;
 }
 
-export async function runDecision(
-  req: DecideRequest & { decidedBy: string; approvedBy?: string[]; record?: boolean; version?: number },
-  base: string,
-  env: Env = process.env,
-): Promise<DecisionResult> {
-  const memo = await decide(req, env);
+type RunOpts = { decidedBy: string; approvedBy?: string[]; record?: boolean; version?: number };
+
+/** Snapshot, fingerprint, optional ledger record and Markdown, the same for every template. */
+async function finish<M extends AnyMemo>(memo: M, req: RunOpts, base: string, env: Env): Promise<DecisionResult<M>> {
   const snapshot = buildSnapshot(memo, { decidedBy: req.decidedBy, approvers: req.approvedBy, version: req.version });
   const fingerprint = await hashSnapshot(snapshot);
   let recorded: RecordResult | null = null;
@@ -49,6 +48,7 @@ export async function runDecision(
     }
   }
   const url = verifyUrl(base, fingerprint);
+  const extra = { fingerprint, verifyUrl: url, txUrl: recorded?.explorerUrl };
   return {
     memo,
     snapshot,
@@ -56,8 +56,16 @@ export async function runDecision(
     verifyUrl: url,
     recorded,
     recordError,
-    markdown: memoToMarkdown(memo, { fingerprint, verifyUrl: url, txUrl: recorded?.explorerUrl }),
+    markdown: memo.schema === "uprali.case.v1" ? caseToMarkdown(memo, extra) : memoToMarkdown(memo, extra),
   };
+}
+
+export async function runDecision(req: DecideRequest & RunOpts, base: string, env: Env = process.env): Promise<DecisionResult> {
+  return finish(await decide(req, env), req, base, env);
+}
+
+export async function runCase(req: CaseRequest & RunOpts, base: string, env: Env = process.env): Promise<DecisionResult<CaseMemo>> {
+  return finish(await decideCase(req, env), req, base, env);
 }
 
 export interface HistoryTarget {
@@ -79,6 +87,25 @@ export async function runAndSave(
   target: HistoryTarget,
   env: Env = process.env,
 ): Promise<DecisionResult & { runId: string | null; parentId: string | null }> {
+  return saveRun(req, target, env, (decisionId, version) => runDecision({ ...req, decisionId, version }, base, env));
+}
+
+/** The same for a business-case template: new product, new feature, market expansion, AI investment. */
+export async function runCaseAndSave(
+  req: CaseRequest & { decidedBy: string; approvedBy?: string[]; record?: boolean },
+  base: string,
+  target: HistoryTarget,
+  env: Env = process.env,
+): Promise<DecisionResult<CaseMemo> & { runId: string | null; parentId: string | null }> {
+  return saveRun(req, target, env, (decisionId, version) => runCase({ ...req, decisionId, version }, base, env));
+}
+
+async function saveRun<M extends AnyMemo>(
+  req: { decisionId?: string; inputs?: Record<string, GivenValue | undefined>; question?: string },
+  target: HistoryTarget,
+  env: Env,
+  run: (decisionId: string | undefined, version: number | undefined) => Promise<DecisionResult<M>>,
+): Promise<DecisionResult<M> & { runId: string | null; parentId: string | null }> {
   let parentId: string | null = null;
   let version: number | undefined;
   let decisionId = req.decisionId;
@@ -95,7 +122,7 @@ export async function runAndSave(
       /* history down: run it as a new decision */
     }
   }
-  const r = await runDecision({ ...req, decisionId, version }, base, env);
+  const r = await run(decisionId, version);
   if (!target.owner) return { ...r, runId: null, parentId };
   const entry = makeEntry({
     id: target.runId,

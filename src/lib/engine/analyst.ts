@@ -1,4 +1,4 @@
-import { FIELDS, fmt, parseAmount, type Extracted } from "./buildVsBuy";
+import { FIELDS, fmt, parseAmount, type Extracted, type FieldDef } from "./buildVsBuy";
 import { runJsonTask, type Env, type JsonResult } from "./providers";
 import type { Memo, ModelUse } from "./types";
 
@@ -59,7 +59,9 @@ Rules: use only numbers that appear in the facts, written exactly as given there
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 /** Keeps only extractions whose quote is really in the text and whose number really is in the quote. */
-export function checkExtraction(question: string, data: unknown): Extracted[] {
+export function checkExtraction(question: string, data: unknown, fields: FieldDef[] = FIELDS): Extracted[] {
+  const allKeys = fields === FIELDS ? ALL_KEYS : fields.map((f) => f.key);
+  const numericKeys = fields === FIELDS ? NUMERIC_KEYS : fields.filter((f) => f.unit !== "text").map((f) => f.key);
   const values = (data as { values?: unknown })?.values;
   if (!Array.isArray(values)) return [];
   const text = norm(question);
@@ -68,8 +70,8 @@ export function checkExtraction(question: string, data: unknown): Extracted[] {
     const key = String(v?.key ?? "");
     const value = String(v?.value ?? "").slice(0, 120);
     const quote = String(v?.quote ?? "").slice(0, 200);
-    if (!ALL_KEYS.includes(key) || !value || !quote || !text.includes(norm(quote))) continue;
-    if (NUMERIC_KEYS.includes(key)) {
+    if (!allKeys.includes(key) || !value || !quote || !text.includes(norm(quote))) continue;
+    if (numericKeys.includes(key)) {
       const n = parseAmount(value);
       const q = parseAmount(quote);
       if (n === null || q === null) continue;
@@ -196,7 +198,7 @@ export function demoNarrative(f: Facts): Narrative {
 }
 
 /** Every dollar amount in the prose must be one the code computed. */
-export function allowedDollarAmounts(f: Facts): Set<string> {
+export function allowedDollarAmounts(f: unknown): Set<string> {
   const nums: number[] = [];
   const walk = (x: unknown) => {
     if (typeof x === "number") nums.push(x);

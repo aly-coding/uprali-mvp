@@ -115,7 +115,7 @@ export interface Extracted {
  * Merges what the caller passed, what was found in the question text, and benchmarks,
  * in that order of authority. Every result says who owns it and whether it is an assumption.
  */
-export function resolveInputs(given: Record<string, GivenValue | undefined>, extracted: Extracted[]): Input[] {
+export function resolveInputs(given: Record<string, GivenValue | undefined>, extracted: Extracted[], fields: FieldDef[] = FIELDS): Input[] {
   const raw: Record<string, number | string | null> = {};
   const out: Record<string, Input> = {};
 
@@ -140,7 +140,7 @@ export function resolveInputs(given: Record<string, GivenValue | undefined>, ext
     };
   };
 
-  for (const f of FIELDS) {
+  for (const f of fields) {
     const g = given[f.key];
     if (g !== undefined && g !== null && g !== "") {
       const inp = fromGiven(f, g);
@@ -170,7 +170,7 @@ export function resolveInputs(given: Record<string, GivenValue | undefined>, ext
   }
 
   // Benchmarks last, once the stated values are known (some benchmarks depend on them).
-  for (const f of FIELDS) {
+  for (const f of fields) {
     if (out[f.key]) continue;
     if (f.benchmark === undefined && f.optional) {
       out[f.key] = { key: f.key, label: f.label, value: null, unit: f.unit, source: "Not given", owner: "human", isAssumption: false, confidence: "low", needsHuman: false };
@@ -199,7 +199,7 @@ export function resolveInputs(given: Record<string, GivenValue | undefined>, ext
       needsHuman: !!f.humanShouldConfirm,
     };
   }
-  return FIELDS.map((f) => out[f.key]);
+  return fields.map((f) => out[f.key]);
 }
 
 function inRange(f: FieldDef, v: number): boolean {

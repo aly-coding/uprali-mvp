@@ -91,6 +91,7 @@ export default function Verify() {
     try {
       const snap = JSON.parse(text);
       if (snap.totals && typeof snap.totals.build === "number") snap.totals.build -= 50_000;
+      else if (snap.metrics && typeof snap.metrics.npv === "number") snap.metrics.npv += 50_000;
       else snap.title = `${snap.title} (edited)`;
       const changed = JSON.stringify(snap, null, 2);
       setOriginal(text);

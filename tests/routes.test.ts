@@ -99,7 +99,7 @@ describe("MCP server", () => {
 
   it("lists its tools", async () => {
     const r = await call({ jsonrpc: "2.0", id: 1, method: "tools/list" });
-    expect(r.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(["build_vs_buy", "list_decisions", "suggest_tools", "verify_decision"]);
+    expect(r.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(["build_vs_buy", "business_case", "list_decisions", "list_templates", "suggest_tools", "verify_decision"]);
   });
 
   it("keeps an agent's decisions per API key and lists only that key's", async () => {
@@ -138,5 +138,20 @@ describe("MCP server", () => {
     });
     expect(r.result.content[0].text).toContain("Every number, with its source and owner");
     expect(r.result.structuredContent.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("lists templates and runs a business case", async () => {
+    const list = await call({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "list_templates", arguments: {} } });
+    expect(list.result.content[0].text).toContain("ai_investment");
+    const r = await call({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: { name: "business_case", arguments: { template: "new_feature", question: "1,200 active customers paying $80 a month; 8 engineer-weeks to build; we'd charge $20 a month extra.", inputs: { adoption_pct: { value: 30, owner: "agent", source: "Similar add-on" } } } },
+    });
+    expect(r.result.structuredContent.template).toBe("new_feature");
+    expect(r.result.structuredContent.snapshot.inputs.find((i: { key: string }) => i.key === "adoption_pct")).toMatchObject({ value: 30, owner: "agent", isAssumption: true });
+    const bad = await call({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "business_case", arguments: { template: "new_feature", inputs: { buy_annual_cost: 1 } } } });
+    expect(bad.result.isError).toBe(true);
   });
 });

@@ -166,3 +166,50 @@ fieldset.group > p { margin: 0 0 8px; }
 .row.between { justify-content: space-between; }
 .warn-text { color: var(--warn); }
 .badge.suggest { border-style: dashed; border-color: var(--warn); color: var(--warn); }
+
+/* Templates and business cases */
+.templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.templates.compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.template { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; }
+.templates.compact .template { padding: 7px 9px; align-items: center; }
+.template:hover { border-color: var(--accent); }
+.template.on { border-color: var(--accent); background: var(--accent-weak); box-shadow: inset 0 0 0 1px var(--accent); }
+.template-icon { display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--accent-weak); color: var(--accent); font-size: 14px; }
+.template.on .template-icon { background: var(--accent); color: #fff; }
+.template-text { display: flex; flex-direction: column; gap: 2px; }
+.templates.compact .template-text strong { font-size: 12px; font-weight: 600; }
+.owner-cards { display: flex; flex-direction: column; gap: 10px; }
+.owner-cards.result-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 14px 0; }
+.owner-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0; background: var(--panel); min-width: 0; }
+fieldset.owner-card legend { display: flex; gap: 8px; align-items: baseline; padding: 0 6px; font-weight: 600; flex-wrap: wrap; }
+.owner-head { display: flex; flex-direction: column; gap: 1px; }
+.owner-role { font-size: 11px; color: var(--muted); font-weight: 500; }
+.formula { margin: 8px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 5px 8px; }
+.formula span { color: var(--accent); font-weight: 700; margin-right: 2px; }
+.headline-metric { display: flex; flex-direction: column; margin: 6px 0 0; }
+.headline-metric strong { font-size: 18px; }
+.badge.key { border-color: var(--accent); color: var(--accent); margin-left: 6px; }
+.eyebrow { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.memo.case h2.verdict { font-size: 22px; margin: 0 0 4px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.verdict.go { border-color: var(--good); }
+.verdict.pilot { border-color: var(--warn); }
+.verdict.no_go { border-color: var(--bad); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 12px 0; }
+.metrics div { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; }
+.metrics strong { font-size: 22px; letter-spacing: -.01em; }
+.neg { color: var(--bad); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 14px 0 8px; overflow-x: auto; }
+.tabs button { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.model { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; }
+table.model th, table.model td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: right; font-size: 13px; }
+table.model th:first-child { text-align: left; font-weight: 500; }
+table.model thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+table.model tr.section th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); padding-top: 12px; }
+table.model tr.total th, table.model tr.total td { font-weight: 700; }
+table.model tr.driver th { color: var(--text); }
+.row-formula { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
+.every-number { margin-top: 14px; }
+.every-number summary { cursor: pointer; font-weight: 600; }

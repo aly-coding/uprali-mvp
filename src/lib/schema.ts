@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { FIELDS } from "./engine/buildVsBuy";
+import { FIELDS, type FieldDef } from "./engine/buildVsBuy";
+import { ALL_TEMPLATE_IDS, CASE_TEMPLATES, isCaseTemplate } from "./engine/cases";
 import type { GivenValue } from "./engine/types";
 
 export const givenValue = z.union([
@@ -34,9 +35,9 @@ export const buildVsBuyBody = z.object({
 
 export type BuildVsBuyBody = z.infer<typeof buildVsBuyBody>;
 
-export function cleanInputs(x: Record<string, unknown> | undefined): Record<string, GivenValue> {
+export function cleanInputs(x: Record<string, unknown> | undefined, fields: FieldDef[] = FIELDS): Record<string, GivenValue> {
   const out: Record<string, GivenValue> = {};
-  for (const f of FIELDS) {
+  for (const f of fields) {
     const v = x?.[f.key];
     if (v !== undefined && v !== null && v !== "") out[f.key] = v as GivenValue;
   }
@@ -60,3 +61,27 @@ export const adviseBody = z.object({
 export function zodMessage(err: z.ZodError): string {
   return err.issues.slice(0, 3).map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
 }
+
+/** The fields a template takes, by its id. */
+export function fieldsFor(template: string | undefined): FieldDef[] {
+  return isCaseTemplate(template) ? CASE_TEMPLATES[template].drivers : FIELDS;
+}
+
+/**
+ * Any template: build vs buy (the default) or one of the business cases. Inputs are checked
+ * against the chosen template's own fields, so an unknown key is refused, as before.
+ */
+export const decideBody = buildVsBuyBody
+  .extend({
+    template: z.enum(ALL_TEMPLATE_IDS).optional(),
+    inputs: z.record(z.string().max(64), givenValue).optional(),
+  })
+  .superRefine((b, ctx) => {
+    const keys = new Set(fieldsFor(b.template).map((f) => f.key));
+    for (const k of Object.keys(b.inputs ?? {})) {
+      if (!keys.has(k)) ctx.addIssue({ code: "custom", path: ["inputs", k], message: `not a field of the ${b.template ?? "build_vs_buy"} template` });
+    }
+  });
+
+/** The business-case API and MCP tool: a template is required. */
+export const caseBody = decideBody.refine((b) => isCaseTemplate(b.template), { path: ["template"], message: "use one of new_product, new_feature, gtm_expansion, ai_investment" });

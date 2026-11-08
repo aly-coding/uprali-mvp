@@ -1,4 +1,7 @@
 import type { Memo } from "./types";
+import type { CaseMemo } from "./caseDecide";
+
+export type AnyMemo = Memo | CaseMemo;
 
 /**
  * The decision snapshot is what gets fingerprinted. It holds the outcome, every number with its
@@ -17,10 +20,12 @@ export interface DecisionSnapshot {
   decidedAt: string;
   decidedBy: string;
   approvers: string[];
-  recommendation: { option: "buy" | "build" | "status_quo" | null; headline: string };
+  recommendation: { option: Memo["recommendation"]["option"] | CaseMemo["recommendation"]["option"]; headline: string };
   status: Memo["status"];
   horizonYears: number;
   totals: { buy: number | null; build: number | null; difference: number | null };
+  /** Business-case templates only: the three-year result. Absent on build vs buy, so older fingerprints don't change. */
+  metrics?: { totalBenefit: number; totalCost: number; cumulativeNet: number; npv: number; roi: number | null; paybackMonths: number | null; discountRatePct: number } | null;
   inputs: Array<{ key: string; value: number | string | null; source: string; owner: string; isAssumption: boolean }>;
   gaps: string[];
   modelsUsed: Array<{ provider: string; model: string; task: string; private: boolean }>;
@@ -47,13 +52,13 @@ export async function hashSnapshot(s: DecisionSnapshot): Promise<string> {
   return sha256Hex(canonicalJson(s));
 }
 
-export function buildSnapshot(memo: Memo, opts: { decidedBy: string; approvers?: string[]; kind?: AnchorKind; decidedAt?: string; version?: number }): DecisionSnapshot {
+export function buildSnapshot(memo: AnyMemo, opts: { decidedBy: string; approvers?: string[]; kind?: AnchorKind; decidedAt?: string; version?: number }): DecisionSnapshot {
   return {
     schema: "uprali.decision.v2",
     kind: opts.kind ?? "decision",
     decisionId: memo.decisionId,
     version: opts.version ?? 1,
-    template: "build_vs_buy",
+    template: memo.schema === "uprali.case.v1" ? memo.template.id : "build_vs_buy",
     title: memo.title,
     decidedAt: opts.decidedAt ?? new Date().toISOString(),
     decidedBy: opts.decidedBy.slice(0, 120),
@@ -61,7 +66,8 @@ export function buildSnapshot(memo: Memo, opts: { decidedBy: string; approvers?:
     recommendation: { option: memo.recommendation.option, headline: memo.recommendation.headline },
     status: memo.status,
     horizonYears: memo.horizonYears,
-    totals: { buy: memo.buy?.total ?? null, build: memo.build?.total ?? null, difference: memo.difference },
+    totals: memo.schema === "uprali.case.v1" ? { buy: null, build: null, difference: null } : { buy: memo.buy?.total ?? null, build: memo.build?.total ?? null, difference: memo.difference },
+    ...(memo.schema === "uprali.case.v1" ? { metrics: memo.metrics ? { ...memo.metrics } : null } : {}),
     inputs: memo.inputs.map((i) => ({ key: i.key, value: i.value, source: i.source, owner: i.owner, isAssumption: i.isAssumption })),
     gaps: memo.gaps.map((g) => g.key),
     modelsUsed: memo.modelsUsed.map((m) => ({ provider: m.provider, model: m.model, task: m.task, private: m.private })),

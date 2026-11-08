@@ -1,5 +1,7 @@
 import { fmt } from "./buildVsBuy";
 import type { Memo } from "./types";
+import type { CaseMemo } from "./caseDecide";
+import { rowValue, type ModelRow, type RowUnit } from "./cases";
 
 const usd = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
@@ -68,5 +70,49 @@ export function memoToMarkdown(m: Memo, extra?: { fingerprint?: string; verifyUr
     if (extra.txUrl) L.push(`Recorded on NEAR testnet: ${extra.txUrl}`);
     if (extra.verifyUrl) L.push(`Verify: ${extra.verifyUrl}`);
   }
+  return L.join("\n");
+}
+
+/** A business-case memo as Markdown. */
+export function caseToMarkdown(m: CaseMemo, extra?: { fingerprint?: string; verifyUrl?: string; txUrl?: string }): string {
+  const L: string[] = [];
+  const years = ["Current", "Year 1", "Year 2", "Year 3"];
+  const cell = (v: number | null, unit: RowUnit) => (v === null ? "" : rowValue(v, unit));
+  const table = (rows: ModelRow[]) => {
+    L.push(`| | ${years.join(" | ")} |`, `|---|${years.map(() => "---").join("|")}|`);
+    for (const r of rows) {
+      if (r.kind === "header") L.push(`| **${r.label}** | | | | |`);
+      else L.push(`| ${r.kind === "total" ? `**${r.label}**` : r.label} | ${r.values.map((v) => cell(v, r.unit)).join(" | ")} |`);
+    }
+  };
+  L.push(`# ${m.title}`, "", `_${m.template.title}_`, "");
+  L.push(`**${m.recommendation.headline}** (confidence: ${m.recommendation.confidence}, status: ${m.status === "needs_human" ? "needs a human" : m.status})`, "", m.recommendation.why);
+  if (m.metrics) {
+    const x = m.metrics;
+    L.push("", "## Three-year result", "", `- Net cash: ${usd(x.cumulativeNet)}`, `- Net present value at ${x.discountRatePct}%: ${usd(x.npv)}`, `- ROI: ${x.roi === null ? "—" : `${Math.round(x.roi * 1000) / 10}%`}`, `- Payback: ${x.paybackMonths === null ? "not within 3 years" : `${x.paybackMonths} months`}`);
+    if (m.capacityByYear) L.push(`- Freed-up time (capacity, not cash): ${usd(m.capacityByYear.reduce((a, b) => a + b, 0))}`);
+  }
+  if (m.cards.length) {
+    L.push("", "## Owner cards", "");
+    for (const c of m.cards) L.push(`- **${c.title}** (${c.owner}): ${c.headline && c.headline.value !== null ? `${c.headline.label} ${rowValue(c.headline.value, c.headline.unit)}. ` : ""}${c.formula}`);
+  }
+  if (m.pnl.length) {
+    L.push("", "## Summary P&L", "");
+    table(m.pnl);
+  }
+  if (m.scenarios.length) {
+    L.push("", "## Scenarios", "", "| | Net cash | NPV | Payback |", "|---|---|---|---|");
+    for (const s of m.scenarios) L.push(`| ${s.label} | ${usd(s.metrics.cumulativeNet)} | ${usd(s.metrics.npv)} | ${s.metrics.paybackMonths === null ? "not within 3 years" : `${s.metrics.paybackMonths} months`} |`);
+    L.push("", `_${m.scenarios[0].flex}._`);
+  }
+  L.push("", "## Biggest risk", "", m.biggestRisk, "", "## Questions a CFO will ask", "", ...m.cfoQuestions.map((q) => `- ${q}`));
+  if (m.guardrails.length) L.push("", "## Guardrails", "", ...m.guardrails.map((g) => `- ${g}`));
+  L.push("", "## Every number, with its source and owner", "", "| Number | Value | Source | Owner | Assumption? |", "|---|---|---|---|---|");
+  for (const i of m.inputs) L.push(`| ${i.label} | ${fmt(i.value, i.unit)} | ${i.source.replace(/\|/g, "/")} | ${i.owner} | ${i.isAssumption ? "yes" : "no"} |`);
+  if (m.gaps.length) L.push("", "## Needs a human", "", ...m.gaps.map((g) => `- ${g.label}: ${g.why}`));
+  L.push("", `_${m.privateAi.note}_`);
+  if (extra?.fingerprint) L.push("", `Fingerprint: \`${extra.fingerprint}\``);
+  if (extra?.verifyUrl) L.push(`Verify: ${extra.verifyUrl}`);
+  if (extra?.txUrl) L.push(`Transaction: ${extra.txUrl}`);
   return L.join("\n");
 }
