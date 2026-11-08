@@ -1,4 +1,4 @@
-# Uprali: build or buy, decided with proof
+# Uprali: business decisions, decided with proof
 
 **Live app:** LIVE-APP-LINK (add the link) · **Demo video:** DEMO-VIDEO-LINK (add the link) · **Built for:** NEAR Hackathon, Privacy & Private AI track
 
@@ -14,7 +14,23 @@ A working prototype makes building look cheap. It's usually about 20% of the rea
 - **Agents can use it directly.** The same tool is an **MCP server** (for Claude Desktop, Claude Code or any MCP client), a plain **HTTP API** with API keys, and a **Slack app** (`/uprali`).
 - **Every decision is kept.** The **History** page lists past decisions with their date, question, recommendation and proof. Open one to see the full memo, or re-run it with changed numbers as a new version of the same decision.
 
+- **Five decision templates.** Build vs buy is the deepest. Four business cases sit beside it: **Launch a new product**, **Add a feature**, **Go-to-market expansion** and **AI investment ROI**. Each groups its drivers into the cards of the people who own them (Product, Sales, Finance and so on), each card shows its formula, and each case gets a 3-year model with **Model**, **Unit Economics**, **Summary P&L** and **Scenarios** tabs, plus net present value, return on investment and payback.
+
 Built for the NEAR Hackathon, **Privacy & Private AI** track.
+
+## Templates
+
+| Template | What it decides | Example result |
+|---|---|---|
+| Build vs buy | Build the tool ourselves or keep paying for one | Buy HubSpot Starter |
+| Launch a new product | Revenue from customers × price against build and running costs | Go |
+| Add a feature | Add-on revenue and kept customers against engineering time and upkeep | Go |
+| Go-to-market expansion | New-market revenue against reps, launch and support costs, with a ramp | Go, with a negative downside |
+| AI investment ROI | Seats and rollout against time saved | Pilot first |
+
+AI investment keeps **cash** apart from **freed-up time**. Time saved only counts as cash when Finance says how much of it becomes cash, and an estimated baseline (not measured) is cut by 30% until someone measures it. So a case built only on a vendor's claim comes out as **Pilot first**, never as savings.
+
+The models only read the numbers stated in the question and write the prose. Code works out every figure. Scenarios move only the key drivers by 20% in each direction; assumptions stay as they are. Every case memo is fingerprinted, recorded, kept in history and verified the same way as build vs buy.
 
 ## Try it in two minutes (no keys needed)
 
@@ -22,11 +38,12 @@ Needs Node 22.18 or later.
 
 1. Run `npm install`, then `npm run dev`. **You should see** `Ready` and http://localhost:3000.
 2. Open http://localhost:3000 and press **Continue in demo mode**. (With the ledger contract configured you'd see **Sign in with NEAR wallet** too.)
-3. Leave the example question in the box and press **Run the decision**. **You should see** **Buy HubSpot Starter**, the line "A working prototype costs about $12,000, but it's only 20% of the work", a 3-year cost breakdown, and a table where every number has **Human** or **Agent**, **Fact** or **Assumption**, and its source.
+3. Pick **Build vs buy**, leave the example question in the box and press **Run the decision**. **You should see** **Buy HubSpot Starter**, the line "A working prototype costs about $12,000, but it's only 20% of the work", a 3-year cost breakdown, and a table where every number has **Human** or **Agent**, **Fact** or **Assumption**, and its source.
 4. Press **Record decision**. **You should see** "Recorded on the local demo ledger" and a **Verify this decision** link.
 5. Open the link. **You should see** **Match**. Download the snapshot, change one number in it, paste it in and press **Check**. **You should see** **No match**.
 6. Open **History**. **You should see** that decision, with **Recorded**. Open it and press **Re-run with new numbers**: the next run is saved as version 2.
-7. Run `npm test`. **You should see** `Tests  74 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
+7. Press **+ New case**, pick **AI investment ROI** and press **Build the case**. **You should see** **Pilot first**, the owner cards with their formulas, and the model in the panel on the right.
+8. Run `npm test`. **You should see** `Tests  98 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
 
 ### The same tool from an agent (MCP)
 
@@ -67,6 +84,9 @@ curl -s -X POST localhost:3000/api/v1/build-vs-buy \
 |---|---|---|
 | `GET /api/v1/build-vs-buy` | Lists every field the tool takes, with its question and benchmark | No |
 | `POST /api/v1/build-vs-buy` | Runs a decision. Body: `question`, `inputs` (by field, each a number, text, or `{value, source, owner, is_assumption}`), `record`, `approved_by`, `decided_by` | Yes |
+| `GET /api/v1/templates` | Lists every template with its owner cards and fields | No |
+| `GET /api/v1/business-case` | Lists the four business-case templates and their fields | No |
+| `POST /api/v1/business-case` | Builds a business case. Body: `template` (`new_product`, `new_feature`, `gtm_expansion`, `ai_investment`), `question`, `inputs` (that template's fields only), `record`, `approved_by`, `decided_by`, `parent_id` | Yes |
 | `POST /api/v1/decisions/record` | Records a snapshot's fingerprint with the server's relayer account | Yes |
 | `POST /api/v1/decisions/verify` | Checks a `snapshot` or a `fingerprint` against the ledger | No |
 | `GET /api/v1/decisions` | Past decisions made with this API key, newest first (`?limit=`, `?decision_id=` for one decision's versions) | Yes |
@@ -75,7 +95,7 @@ curl -s -X POST localhost:3000/api/v1/build-vs-buy \
 | `GET /api/sample` | The sample decision for judges, already recorded | No |
 | `GET /api/attestation` | Fetches NEAR AI Cloud's attestation report with a fresh nonce and checks it | No |
 | `GET /api/config` | Shows what's configured, never a secret | No |
-| `/mcp` | MCP server with `build_vs_buy`, `suggest_tools`, `verify_decision` and `list_decisions` | Yes |
+| `/mcp` | MCP server with `build_vs_buy`, `business_case`, `list_templates`, `suggest_tools`, `verify_decision` and `list_decisions` | Yes |
 
 `POST /api/v1/build-vs-buy` and the MCP `build_vs_buy` tool also take `parent_id`: the run id of an earlier decision, to re-run it with changed numbers as its next version. Agent history is kept per API key, so it needs `UPRALI_API_KEYS` set; with an open API nothing is kept.
 
@@ -227,7 +247,7 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 84 tests, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the sample decision's Match and No match, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 98 tests, including all four business-case templates, their scenarios, payback and NPV, the AI cash and capacity split, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the sample decision's Match and No match, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
 **Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's faucet request and contract deploy, the sample decision recorded on testnet, a wallet's sign-in message for history, and the Slack app against real Slack. Run the demo script once on the live deploy before recording the video.
 
