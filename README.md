@@ -1,186 +1,184 @@
-# Uprali: an AI financial analyst you can audit
+# Uprali: build or buy, decided with proof
 
-Uprali helps people who aren't in finance, like PMs and engineers, build a business case their CFO will trust. You talk to the analyst by text or voice. It asks for one number at a time, suggests a benchmark when you don't know, and rates how sure each number is. It then writes a decision memo with a recommendation, the cost and payback, the biggest risk, what would change its mind, and a 30-second spoken version.
+Uprali is a private AI financial analyst for one decision teams get wrong all the time: **should we build this tool ourselves, or keep paying for one?**
 
-**Conversations stay private. Decisions are provable.** The chat never leaves your browser's storage and is never put on a ledger. When a decision is made, Uprali records only a SHA-256 fingerprint of the final snapshot on NEAR testnet. The snapshot holds the case version, assumptions, approvers, time and which AI models helped. Anyone holding the snapshot can later prove that it is exactly what was approved, and when, without the data itself ever touching a chain.
+A working prototype makes building look cheap. It's usually about 20% of the real job. Uprali works out the full multi-year cost of building, including production hardening, integrations, upkeep, security, hosting, on-call, the knowledge lost when the builder leaves, and the core product work that doesn't get done. Then it sets that against the full cost of buying.
 
-Built at NEAR HACKATHON, **Privacy & Private AI** track.
+- **Every number has a source and an owner.** Each figure in the memo says where it came from, whether a person or an agent stands behind it, and whether it's a fact or an assumption. Anything only a person can answer is marked **needs a human**.
+- **The model runs privately.** By default the analyst runs on **NEAR AI Cloud** inside a hardware enclave. Uprali checks the enclave's attestation with a fresh nonce and shows a **Verified** badge. Claude is the fallback. A built-in rule-based analyst means it works with no keys at all.
+- **The decision is provable.** Only a SHA-256 fingerprint of the decision goes on **NEAR testnet**, signed by the decision maker's own NEAR wallet. Anyone with the decision file can later prove nothing in it changed.
+- **Agents can use it directly.** The same tool is an **MCP server** (for Claude Desktop, Claude Code or any MCP client) and a plain **HTTP API**, with API keys.
+
+Built for the NEAR Hackathon, **Privacy & Private AI** track.
 
 ## Try it in two minutes (no keys needed)
 
 Needs Node 22.18 or later.
 
-1. Run `npm install`, then `npm run dev`. **You should see** `Ready` and a local URL, http://localhost:3000.
-2. Open http://localhost:3000. **You should see** three panels (Case, Analyst, Decision memo) and the analyst's first question. With no keys set, the analyst is the scripted demo analyst and the ledger is a local demo ledger that the UI labels "not on chain".
-3. Answer with the fictional numbers in `samples/acme-crm-answers.md`. **You should see** each answer appear as an assumption card with a confidence badge, and the memo say **Buy HubSpot Starter**.
-4. Type an approver name and press **Record on NEAR**. **You should see** a 64-character fingerprint and a "Download snapshot" link.
-5. Open **Verify a decision**, then drop in the snapshot. **You should see** **Match**. Change one number in the file and drop it again. **You should see** **No match**.
-6. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`. With a `NEARAI_API_KEY` set, `npm run attest` runs the same checks against NEAR AI Cloud's live attestation report.
-7. Run `npm test`. **You should see** `Tests  26 passed`.
+1. Run `npm install`, then `npm run dev`. **You should see** `Ready` and http://localhost:3000.
+2. Open http://localhost:3000 and press **Continue in demo mode**. (With the ledger contract configured you'd see **Sign in with NEAR wallet** too.)
+3. Leave the example question in the box and press **Run the decision**. **You should see** **Buy HubSpot Starter**, the line "A working prototype costs about $12,000, but it's only 20% of the work", a 3-year cost breakdown, and a table where every number has **Human** or **Agent**, **Fact** or **Assumption**, and its source.
+4. Press **Record decision**. **You should see** "Recorded on the local demo ledger" and a **Verify this decision** link.
+5. Open the link. **You should see** **Match**. Download the snapshot, change one number in it, paste it in and press **Check**. **You should see** **No match**.
+6. Run `npm test`. **You should see** `Tests  31 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
 
-## What's in the MVP
+### The same tool from an agent (MCP)
 
-| Piece | Where |
+With the app running, add it to Claude Code:
+
+```bash
+claude mcp add --transport http uprali http://localhost:3000/mcp
+```
+
+Or to Claude Desktop (Settings → Developer → Edit Config), using `mcp-remote`:
+
+```json
+{
+  "mcpServers": {
+    "uprali": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://YOUR-APP.vercel.app/mcp", "--header", "Authorization:${UPRALI_AUTH}"],
+      "env": { "UPRALI_AUTH": "Bearer YOUR-API-KEY" }
+    }
+  }
+}
+```
+
+Then ask: *"Use Uprali to decide whether we should build our own CRM or keep paying $720 a year for HubSpot Starter. Our prototype took 3 weeks and an engineer costs us $3,800 a week."* **You should see** the agent call `build_vs_buy` and return the memo with its sources, owners and fingerprint. Ask it to record the decision and it calls the tool with `record: true`. `verify_decision` checks a fingerprint or snapshot.
+
+### The same tool over HTTP
+
+```bash
+curl -s -X POST localhost:3000/api/v1/build-vs-buy \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer YOUR-API-KEY' \
+  -d @samples/acme-crm-request.json
+```
+
+**You should see** JSON with `memo`, `markdown`, `snapshot`, `fingerprint`, `verifyUrl` and, because the sample sets `"record": true`, `recorded`. The API key header is only needed when `UPRALI_API_KEYS` is set.
+
+| Endpoint | What it does | Key? |
+|---|---|---|
+| `GET /api/v1/build-vs-buy` | Lists every field the tool takes, with its question and benchmark | No |
+| `POST /api/v1/build-vs-buy` | Runs a decision. Body: `question`, `inputs` (by field, each a number, text, or `{value, source, owner, is_assumption}`), `record`, `approved_by`, `decided_by` | Yes |
+| `POST /api/v1/decisions/record` | Records a snapshot's fingerprint with the server's relayer account | Yes |
+| `POST /api/v1/decisions/verify` | Checks a `snapshot` or a `fingerprint` against the ledger | No |
+| `GET /api/attestation` | Fetches NEAR AI Cloud's attestation report with a fresh nonce and checks it | No |
+| `GET /api/config` | Shows what's configured, never a secret | No |
+| `/mcp` | MCP server with `build_vs_buy` and `verify_decision` | Yes |
+
+## Demo script (about 3 minutes)
+
+1. **The problem (20 s).** "Our engineer built a CRM prototype in three weeks, so building looks cheaper than HubSpot. Is it?"
+2. **Sign in (15 s).** Open the live app, press **Sign in with NEAR wallet**, approve in MyNearWallet on testnet. The app shows your account, for example `aly-uprali.testnet`.
+3. **Run the decision (40 s).** Paste the example question and press **Run the decision**. Point at:
+   - the green **NEAR AI Cloud: Verified** badge, then open it to show the five attestation checks;
+   - "the prototype is $12,000, but it's only 20% of the work; the full 3-year build is about $200,000";
+   - the table: the numbers you typed are **Human / Fact**, the benchmarks are **Agent / Assumption**, and the engineer cost is flagged **Needs a human**.
+4. **Record it (30 s).** Press **Sign and record as aly-uprali.testnet**. Open **See the transaction** on NEAR Blocks: the contract call shows the fingerprint and your account as the signer. Nothing else about the decision is on chain.
+5. **Verify it (30 s).** Press **Verify this decision**: **Match**, recorded by your account at that time. Change one number in the snapshot and check again: **No match**.
+6. **Agents (40 s).** Switch to Claude Desktop with the Uprali MCP server and ask the same question in plain words. Claude calls `build_vs_buy` and gets the same memo, sources and fingerprint. "Same engine, for people and for agents, with every number traceable."
+
+## How the decision is worked out
+
+Every dollar figure is computed in code (`src/lib/engine/buildVsBuy.ts`). Models only do two narrow jobs: read stated facts out of the question, and write the risk, CFO questions and 30-second summary.
+
+**Buy:** subscription each year, rising by the vendor's yearly price increase (benchmark 7%), plus one-time setup (benchmark 10% of year one) and admin time.
+
+**Build:**
+
+| Cost line | How |
 |---|---|
-| Analyst chat with text and voice (browser speech-to-text and read-aloud) | `src/components/Workspace.tsx` |
-| Pluggable analyst: NEAR AI Cloud (private TEE inference, the default when its key is set), Claude (Anthropic) or a scripted demo analyst | `src/lib/llm/` |
-| "Verify the enclave" panel and `npm run attest`: checks NEAR AI's attestation report against a fresh nonce | `src/lib/attest.ts`, `src/app/api/attestation/`, `scripts/attest-check.mjs` |
-| Two decision templates: build vs buy, and new hire payback | `src/lib/templates.ts` |
-| Deterministic decision memo: every number is computed in code, never by the model | `src/lib/memo.ts` |
-| Canonical snapshot and SHA-256 fingerprint, identical in browser and server | `src/lib/snapshot.ts` |
-| NEAR ledger contract in Rust: owner and writer allowlist, no overwrites, NEP-297 events | `contract/` |
-| Record and verify APIs, plus a public "Verify a decision" page | `src/app/api/ledger/`, `src/app/verify/` |
-| Audit log of which model filled each assumption | memo panel, and `modelsUsed` in the snapshot |
+| Working prototype | prototype engineer-weeks × cost of an engineer-week |
+| Making it production-ready | the prototype is ~20% of the work, so the full build is prototype weeks ÷ 20%, minus the prototype |
+| Integrations | number of integrations × engineer-weeks each |
+| Upkeep | ~20% of the build cost every year |
+| Security and compliance | a yearly budget |
+| Hosting | a yearly budget |
+| On-call | hours a week × 52 × hourly cost |
+| Knowledge lost if the builder leaves | yearly chance they leave (~15%) × engineer-weeks to take over |
+| Core product work not done | engineer-weeks spent on the build × how much more core work returns than it costs (~50%) |
 
-### How the pieces fit
+The memo also gives the subscription price at which buying stops being cheaper, and the inputs that would flip the answer and at what value.
 
-```
-Browser (private)                       Next.js server (stateless)            NEAR testnet
------------------                       --------------------------            ------------
-chat + assumptions in localStorage ---> /api/analyst --> Claude | NEAR AI
-                                          (returns structured updates only)
-memo computed locally
-"Record on NEAR": snapshot JSON  -----> /api/ledger/record
-                                          re-hashes snapshot (SHA-256)
-                                          relayer signs record(hash, kind,  --> uprali-ledger contract
-                                          case_id, version)                      stores hash + time + block
-Verify page: hash snapshot locally ---> /api/ledger/verify --> get(hash) -----> view call
-```
+**Where each number comes from**, in order: a value the caller gave (with its own source and owner), a fact stated in the question (owner: human, source: the quote), or a labelled benchmark (owner: agent, assumption, low confidence). Numbers with no sensible benchmark, like the subscription price or the prototype time, stay empty and are marked **needs a human**. A memo is **complete** when no number still needs a human, **draft** when some do, and **needs a human** when it can't be computed yet. A decision that needs a human can't be recorded.
 
-The server never stores the conversation or the snapshot. A relayer account signs the transaction, so finance users don't need a crypto wallet. This follows the plan of Google sign-in first, with a wallet as an option.
+**Guards on the models.** An extracted fact is kept only if its quote is really in the question and its number really is in the quote. Prose from a model is kept only if every dollar amount in it is one the engine computed; otherwise the built-in wording is used. Instructions inside the question are ignored.
 
-The record kinds are `decision`, `approval` and `outcome_review`, so the same case can anchor its approvals and its later outcome review.
+## Privacy
 
-## Privacy: what is and isn't kept
+| What | Where it goes |
+|---|---|
+| The question and the numbers | To the model for one request (NEAR AI Cloud's enclave by default), then gone. The server keeps nothing and logs only error types. |
+| The memo and the snapshot | Returned to the caller. The demo screen keeps the snapshot in the browser so the verify page can check it. |
+| On chain | Only the SHA-256 fingerprint, the kind (`decision`), the decision id, the version, the signer's account and the block time. |
 
-- **In your browser only:** the conversation and the working case, in localStorage under `uprali.workspace.v1`. "New case" clears it.
-- **On the server:** nothing after a response. The routes have no database, cache or session. Errors are logged by type only, never with request content. See the comments at the top of `src/app/api/analyst/route.ts` and `src/app/api/ledger/record/route.ts`.
-- **On the model provider:** the turn being answered. With NEAR AI, that runs inside a TEE, and the **Verify the enclave** panel checks NEAR AI's attestation report with a fresh random nonce. It confirms the nonce is echoed, that the Intel TDX quote binds the nonce and the node's signing key, and that the NVIDIA GPU evidence carries the same nonce. It doesn't verify Intel's or NVIDIA's signature chains. The panel lists those as "not checked here".
-- **On NEAR testnet:** only the fingerprint, the kind, the case id and the version.
+**NEAR AI Cloud attestation** (`src/lib/attest.ts`). Uprali asks NEAR AI Cloud for its attestation report with a fresh random nonce and checks five things: the report is for the model in use, it echoes the nonce (so it isn't replayed), it contains an Intel TDX quote, the quote's report data binds the enclave's signing key and the nonce, and NVIDIA GPU evidence is present and bound to the same nonce. **Not checked here:** the Intel and NVIDIA signature chains themselves, and whether the enclave's code hash is one you expect. Those need Intel's and NVIDIA's own verification services. The badge says **Verified** only when all five checks pass and the model really was NEAR AI.
 
-## Run it locally
+## NEAR ledger contract
 
-```bash
-npm install
-npm run dev
-```
+`contract/` is a small Rust contract (near-sdk 5.5):
 
-Open http://localhost:3000. With no keys set, the app runs in **demo mode**: a scripted analyst walks you through the case, and "Record on NEAR" writes to a local, off-chain demo ledger stored in `.data/ledger.json`. The UI labels this clearly as not on chain.
+- `record(hash, kind, case_id, version)` stores an anchor and refuses the same fingerprint twice, so a record can never be overwritten. It emits a NEP-297 style event.
+- Recording is **open**, so any wallet can sign its own decisions and appears as `recorded_by`. The owner can close it to the owner and an allowlist with `set_open(false)` and `add_writer`.
+- `get(hash)`, `count()`, `owner()`, `is_open()`, `is_writer(account_id)` are free reads.
 
-```bash
-npm test            # 26 unit and API tests (vitest)
-npm run attest -- --offline   # attestation checks on a synthetic report, no key needed
-npm run typecheck   # tsc --noEmit
-npm run build       # production build
-```
+`npm run contract:test` runs its 8 tests. `npm run contract:build` builds `contract/res/uprali_ledger.wasm` (Rust 1.81). `npm run contract:deploy` creates `ledger.<your account>` on testnet, funds it with 3 NEAR, deploys the wasm and initialises it, all in one transaction. It refuses anything but testnet.
+
+## Setting it up for the live demo (for Aly)
+
+You don't need to touch code. Each step is a few clicks; the terminal steps can be done by anyone you trust with a laptop.
+
+1. **GitHub.** The code lives in the public repo `aly-coding/uprali-mvp`.
+2. **NEAR AI Cloud key.** Sign up at NEAR AI Cloud and create an API key. Keep it to yourself: you'll paste it into Vercel in step 5, never into a chat.
+3. **A NEAR testnet wallet for you.** In MyNearWallet, switch to **testnet** and create an account, for example `aly-uprali.testnet`. This is the wallet you sign in with during the demo. Testnet tokens are free and worthless.
+4. **A testnet account for the server, and the contract.** On a laptop with Node installed, in the project folder:
+   ```bash
+   npx near-cli-rs account create-account sponsor-by-faucet-service uprali-relayer.testnet autogenerate-new-keypair save-to-legacy-keychain network-config testnet create
+   ```
+   This command wasn't run from this build machine, so if NEAR CLI asks something different, follow its prompts to create a testnet account funded by the faucet. The account's key is saved in `~/.near-credentials/testnet/uprali-relayer.testnet.json`. Put the account and its `private_key` into a file called `.env.local` as `NEAR_ACCOUNT_ID=` and `NEAR_PRIVATE_KEY=`, then run `npm run contract:deploy`. It prints a line like `NEAR_CONTRACT_ID=ledger.uprali-relayer.testnet`.
+5. **Vercel.** Import the GitHub repo in Vercel (it detects Next.js). Under **Settings → Environment Variables** add:
+   - `NEARAI_API_KEY`: from step 2
+   - `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`: from step 4
+   - `UPRALI_API_KEYS`: any long random text, for example 32 letters and digits. This is the key agents use.
+   - `ANTHROPIC_API_KEY`: optional, so Claude can step in if NEAR AI is down.
+
+   Then redeploy. Open the app: you should see **Sign in with NEAR wallet**, and `/api/config` should list `nearai` first.
+6. **Submit.** Post the demo video on X, then submit the repo, the live link and the post in the hackathon form before **Nov 14, 2026 at 23:59 UTC (3:59 PM Pacific)**.
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and fill in what you need. Never commit real keys.
+See `.env.example`. Everything is optional; with nothing set Uprali runs in demo mode.
 
-| Variable | What it does |
+| Variable | What it's for |
 |---|---|
-| `ANTHROPIC_API_KEY` | Turns on Claude as the analyst |
-| `ANTHROPIC_MODEL` | Default `claude-opus-5-5` |
-| `NEARAI_API_KEY` | Turns on NEAR AI Cloud (private inference in a TEE) |
-| `NEARAI_BASE_URL`, `NEARAI_MODEL` | Default `https://cloud-api.near.ai/v1` and `zai-org/GLM-5.1-FP8` |
-| `LLM_PROVIDER` | `nearai`, `anthropic` or `demo`. Empty means NEAR AI, else Claude, else demo. The chat also has a picker. |
-| `NEAR_NETWORK` | Must be `testnet`. The app refuses mainnet. |
-| `NEAR_RPC_URL` | Default `https://test.rpc.fastnear.com` |
-| `NEAR_CONTRACT_ID` | The deployed ledger, e.g. `ledger.youraccount.testnet`. Empty means the local demo ledger. |
-| `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY` | The testnet relayer account that signs records. Server-side only. |
-| `RECORD_ACCESS_CODE` | Optional. If set, the Record button asks for this code, so strangers can't spend your relayer's testnet gas. |
-| `LOCAL_LEDGER_PATH` | Optional path for the demo ledger file |
+| `NEARAI_API_KEY`, `NEARAI_BASE_URL`, `NEARAI_MODEL` | Private inference on NEAR AI Cloud (default `zai-org/GLM-5.1-FP8`) |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude fallback (default `claude-opus-5-5`, with Anthropic's server-side fallbacks on) |
+| `LLM_PROVIDER` | `demo` forces the built-in analyst; `anthropic` tries Claude first |
+| `UPRALI_API_KEYS` | Comma-separated API keys for `/mcp` and `/api/v1` |
+| `PUBLIC_BASE_URL` | Address used in verify links (Vercel's is picked up automatically) |
+| `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `NEAR_RPC_URL` | Ledger contract and the relayer agents record through (testnet only) |
+| `RECORD_ACCESS_CODE` | Lets the demo screen record through the relayer without a wallet when this code is typed |
 
-The Claude call uses structured JSON output and enables the API's server-side fallback (`fallbacks: "default"`). If the primary model declines a request, the API retries it on a fallback model, and the app handles a final refusal with a plain message.
+## What's tested, and what isn't yet
 
-## Put the ledger on NEAR testnet
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 31 tests), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
-1. **Make a testnet account.** Create a `.testnet` account in a testnet wallet (for example MyNearWallet on testnet) or with `near-cli-rs`, and fund it from the testnet faucet. You need about 3 test NEAR. Copy its account id and private key (`ed25519:...`) into `.env.local` as `NEAR_ACCOUNT_ID` and `NEAR_PRIVATE_KEY`.
-2. **Deploy the contract.**
-   ```bash
-   npm run contract:deploy
-   ```
-   This creates `ledger.<your account>`, funds it with 3 NEAR, deploys `contract/res/uprali_ledger.wasm`, sets your account as owner, and prints the `NEAR_CONTRACT_ID=` line to add.
-3. Add `NEAR_CONTRACT_ID` to `.env.local`, restart, and record a decision. The app shows the transaction link on testnet.nearblocks.io.
+**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, and wallet sign-in and signing in a real browser. Run the demo script once on the live deploy before recording the video.
 
-### Build and test the contract yourself (optional)
+## Project layout
 
-The compiled wasm is committed, so you don't need Rust to deploy. To rebuild it:
-
-```bash
-npm run contract:test    # 6 Rust unit tests (needs stable Rust)
-npm run contract:build   # needs Rust 1.81.0 with the wasm32-unknown-unknown target
+```
+src/lib/engine/      decision engine: cost model, extraction and narration, providers, snapshot, markdown
+src/lib/attest.ts    NEAR AI Cloud attestation checks
+src/lib/ledger/      NEAR ledger client and the local demo ledger
+src/lib/service.ts   shared by the API, MCP server and demo screen
+src/app/mcp/         MCP server
+src/app/api/         HTTP API
+src/components/      demo screen, wallet sign-in, memo and verify page
+contract/            Rust ledger contract
+scripts/             contract build and deploy, attestation check
+samples/             fictional example data
 ```
 
-`near-sdk` is pinned to 5.5.0, and the wasm is built with Rust 1.81 because newer compilers emit wasm features that NEAR's runtime rejects. The build prints the wasm's sha256 so judges can match it to the deployed code.
-
-Contract methods: `new(owner)`, `record(hash, kind, case_id, version)`, `get(hash)`, `count()`, `owner()`, `add_writer` / `remove_writer` / `is_writer`.
-
-## Deploy to Vercel
-
-1. Push this folder to a public GitHub repo.
-2. In Vercel, import the repo. The framework is detected as Next.js, and no settings need changing.
-3. Add the environment variables above in Project Settings > Environment Variables, at least `ANTHROPIC_API_KEY`. For on-chain records also add `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY` and ideally `RECORD_ACCESS_CODE`.
-4. Deploy. For the Privacy track, set `NEARAI_API_KEY` so the private chat runs on NEAR AI and the enclave check works. Without NEAR variables, Vercel's read-only filesystem keeps the demo ledger in memory only, so set up testnet for the live demo.
-
-## Two-minute demo script
-
-1. **(0:00) The problem.** "PMs and engineers have to justify spend to finance, but they don't speak finance, and ChatGPT will happily invent numbers. Uprali is an analyst that asks the right questions and leaves an audit trail."
-2. **(0:15) Start a case.** With Claude as the analyst, pick **Build vs buy** and type "Should we build our own CRM or keep paying for HubSpot?". The analyst asks one question at a time.
-3. **(0:30) Use voice.** Tap the mic and say "about 720 dollars a year". The assumption card fills in as *You*, rated medium because you said "about".
-4. **(0:45) Don't know a number.** For engineer cost, say "not sure". The analyst offers a benchmark, marks it **low confidence** and logs which model suggested it.
-5. **(1:00) The memo.** Show the recommendation, cost and payback, biggest risk, "what would change my mind", the CFO cheat sheet and the what-if line. Tap **Read aloud** for the 30-second version. Point out that the numbers come from code, not the LLM.
-6. **(1:20) Prove the AI is private.** Switch the analyst to **NEAR AI**, answer one question, then press **Verify the enclave**. "The model runs in a hardware enclave, and we just checked its attestation with a fresh nonce, so this proof can't be replayed."
-7. **(1:30) Record the decision.** Add approver "Aly (CFO)", press **Record on NEAR**, and open the nearblocks link. "Only a fingerprint went on chain. The conversation never left this browser."
-8. **(1:45) Prove it.** Download the snapshot, open **Verify a decision**, and drop it in: **Match**. Change one number in the file and drop it again: **No match**. "That's an audit trail finance can trust, without putting private data on a public chain."
-
-## Who it's for
-
-- **Buyer:** finance teams. The first customers are CFOs and financial analysts.
-- **Users:** the PMs and engineers who bring them spending requests, so each of them has an analyst in their pocket.
-- **Why now:** teams already ask general chatbots for business cases, but those invent numbers, leave no trail and send private figures to a third party.
-- **Pricing (planned):** a free plugin with one template, a 30-day trial, then Basic at $29 a month (3 templates, 9 decisions a month), Executive at $100 per seat (all templates, integrations, unlimited decisions), and a sales-led Enterprise plan.
-- **Roadmap:** Google sign-in, then optional NEAR wallet sign-in; recording approvals and outcome reviews from the UI; more templates; full Intel and NVIDIA signature checks in the enclave panel.
-
-## Built with
-
-Next.js 16, React 19, TypeScript 5, zod, vitest, `@anthropic-ai/sdk`, `near-api-js`, and `near-sdk` 5.5 in Rust. NEAR AI Cloud and the Anthropic API for the analyst, and NEAR testnet for the ledger.
-
-Most of this code was written with AI help, using Claude, then reviewed and tested as described below.
-
-## What was tested, honestly
-
-Tested in the build environment:
-- 26 vitest tests pass. They cover both templates' math, memo building, the canonical JSON and SHA-256 fingerprint (including a known test vector and tamper detection), the demo analyst over a full case, cleanup of the model's output, provider selection, Anthropic message shaping, the local ledger, the NEAR ledger's read path against a mocked RPC, and the analyst, record and verify API routes, and the attestation checks (a good report, a replayed report, a quote that doesn't bind the nonce or the key, and an empty report).
-- `npm run attest -- --offline` passes.
-- 6 Rust contract tests pass. The wasm builds with Rust 1.81.
-- TypeScript strict typecheck and `next build` pass.
-- The production server runs. The demo-mode analyst, record, duplicate refusal (409) and verify endpoints were checked with curl, and both pages return 200.
-
-Not tested yet, because the build environment couldn't reach these services or had no keys:
-- Live Claude and NEAR AI calls, including the live attestation report. The checker follows NEAR AI's published report layout, but it hasn't seen a real report yet.
-- Deploying the contract and recording on NEAR testnet (`scripts/deploy-contract.mjs` and the record path in `src/lib/ledger/near.ts`).
-- Clicking through the UI in a real browser, including voice input, which needs Chrome or Edge.
-
-## Not built yet
-
-- Google sign-in, and optional NEAR wallet sign-in. The app works without accounts today.
-- Saving cases to a server or sharing them with teammates. Cases live in your browser on purpose.
-- More templates, such as pricing changes or vendor renewals.
-
-## Hackathon submission checklist
-
-- [ ] Public GitHub repo with this README and LICENSE, kept public through judging, with no secrets anywhere in its history (AI judges first check that it runs as described here)
-- [ ] `npm run attest` passing against live NEAR AI, with a screenshot of the **Verified** panel
-- [ ] One or two measured numbers from a live run, such as time from first question to finished memo
-- [ ] Live Vercel URL with `ANTHROPIC_API_KEY` and the NEAR testnet variables set
-- [ ] One real decision recorded on testnet, with its nearblocks link in the submission
-- [ ] Demo video of about 2 minutes, following the script above
-- [ ] Public post on X that says "built at NEAR HACKATHON", tags @NEARProtocol and #NEARHackathon, and has the video or screenshots
-- [ ] A mainnet NEAR account ready for the payout (the app itself stays on testnet)
-- [ ] Submission form filled in once (it can't be edited) before **Nov 14, 2026, 23:59 UTC** (3:59 PM Pacific)
-
-## License
-
-MIT
+MIT licensed.

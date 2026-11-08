@@ -1,5 +1,5 @@
-import Workspace from "@/components/Workspace";
+import { DecideApp } from "@/components/DecideApp";
 
 export default function Home() {
-  return <Workspace />;
+  return <DecideApp />;
 }

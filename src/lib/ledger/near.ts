@@ -1,7 +1,7 @@
 import { Account, JsonRpcProvider, teraToGas, type KeyPairString } from "near-api-js";
 import type { Ledger, RecordArgs } from "./index";
 import { LedgerError } from "./index";
-import type { LedgerAnchor, RecordResult } from "../types";
+import type { LedgerAnchor, RecordResult } from "./types";
 
 interface ContractAnchor {
   hash: string;
@@ -31,7 +31,7 @@ export function explorerTxUrl(network: string, txHash: string): string {
 
 /**
  * Records fingerprints on the uprali-ledger contract (contract/). The server signs with a
- * relayer account, so finance users never need a wallet: the plan's "Google first, wallet optional".
+ * relayer account. Agents calling the API use this; people in the demo app sign with their own wallet.
  */
 export class NearLedger implements Ledger {
   network = "near-testnet" as const;

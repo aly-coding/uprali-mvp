@@ -2,15 +2,22 @@
 
 Everything here is made up, so you can try Uprali without real company numbers.
 
-- `acme-crm-answers.md`: answers to type or say for the build vs buy case.
-- `acme-hire-answers.md`: answers for the new hire case.
-- `acme-crm-snapshot.json`: a decision snapshot in the format the app records.
+- `acme-crm-answers.md`: a question to paste into the decision screen, and the memo to expect.
+- `acme-crm-request.json`: the same decision as an API request, with two numbers a person supplied (each with its source and owner).
+- `acme-crm-snapshot.json`: the decision snapshot the app fingerprints and records.
 
-To try the snapshot without the UI, start the app, then run:
+With the app running (`npm run dev`), try:
 
 ```bash
-curl -s -X POST localhost:3000/api/ledger/record -H 'content-type: application/json' \
+# Run the decision and record its fingerprint (local demo ledger, or NEAR testnet once configured)
+curl -s -X POST localhost:3000/api/v1/build-vs-buy -H 'content-type: application/json' \
+  -d @samples/acme-crm-request.json
+
+# Record the sample snapshot, then check it
+curl -s -X POST localhost:3000/api/v1/decisions/record -H 'content-type: application/json' \
+  -d "{\"snapshot\": $(cat samples/acme-crm-snapshot.json)}"
+curl -s -X POST localhost:3000/api/v1/decisions/verify -H 'content-type: application/json' \
   -d "{\"snapshot\": $(cat samples/acme-crm-snapshot.json)}"
 ```
 
-You should see a `hash` and `"network":"local-demo"` (or `near-testnet` with a `txHash` once the contract is set up). Then drop the file on the **Verify a decision** page and you should see **Match**.
+The last call should say **Match**. Change any number in the snapshot and it says **No match**. If `UPRALI_API_KEYS` is set, add `-H 'authorization: Bearer <your key>'` to the first two calls.

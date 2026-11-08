@@ -1,21 +1,178 @@
 {
-  "schema": "uprali.decision.v1",
+  "schema": "uprali.decision.v2",
   "kind": "decision",
-  "caseId": "UP-SAMPLE-ACME-CRM",
-  "caseTitle": "Acme Analytics: build our own CRM or keep HubSpot? (fictional)",
-  "caseVersion": 7,
-  "templateId": "build_vs_buy",
-  "decidedAt": "2026-11-08T10:00:00.000Z",
-  "decision": "Buy HubSpot Starter",
-  "approvers": ["Dana Reyes (CFO, fictional)"],
-  "assumptions": [
-    { "key": "buy_annual_cost", "value": 720, "source": "Stated by the user", "confidence": "medium", "filledBy": "You" },
-    { "key": "buy_setup_cost", "value": 0, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
-    { "key": "build_weeks", "value": 2, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
-    { "key": "engineer_weekly_cost", "value": 4000, "source": "Analyst benchmark", "confidence": "low", "filledBy": "NEAR AI (zai-org/GLM-5.1-FP8)" },
-    { "key": "horizon_years", "value": 3, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
-    { "key": "maintenance_pct", "value": 20, "source": "Stated by the user", "confidence": "high", "filledBy": "You" },
-    { "key": "option_name", "value": "HubSpot Starter", "source": "Stated by the user", "confidence": "high", "filledBy": "You" }
+  "decisionId": "UP-20261108-d4cd5c0f",
+  "version": 1,
+  "template": "build_vs_buy",
+  "title": "Build or buy a software tool: HubSpot Starter",
+  "decidedAt": "2026-11-08T15:58:22.131Z",
+  "decidedBy": "api-agent",
+  "approvers": [
+    "Finance lead (fictional)"
   ],
-  "modelsUsed": ["NEAR AI (zai-org/GLM-5.1-FP8)"]
+  "recommendation": {
+    "option": "buy",
+    "headline": "Buy HubSpot Starter"
+  },
+  "status": "complete",
+  "horizonYears": 3,
+  "totals": {
+    "buy": 16066,
+    "build": 190740,
+    "difference": 174674
+  },
+  "inputs": [
+    {
+      "key": "tool_name",
+      "value": "HubSpot Starter",
+      "source": "Stated in the request: \"for HubSpot Starter\"",
+      "owner": "human",
+      "isAssumption": false
+    },
+    {
+      "key": "what_to_build",
+      "value": "our own CRM",
+      "source": "Stated in the request: \"build our own CRM\"",
+      "owner": "human",
+      "isAssumption": false
+    },
+    {
+      "key": "buy_annual_cost",
+      "value": 720,
+      "source": "Stated in the request: \"$720 a year\"",
+      "owner": "human",
+      "isAssumption": false
+    },
+    {
+      "key": "buy_setup_cost",
+      "value": 72,
+      "source": "Benchmark: about 10% of the first year's subscription",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "buy_price_increase_pct",
+      "value": 7,
+      "source": "Benchmark: SaaS renewals commonly rise 5 to 10% a year",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "buy_admin_hours_month",
+      "value": 4,
+      "source": "Benchmark: a few hours a month of admin for a small team",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "prototype_weeks",
+      "value": 3,
+      "source": "Stated in the request: \"prototype in 3 weeks\"",
+      "owner": "human",
+      "isAssumption": false
+    },
+    {
+      "key": "prototype_share_pct",
+      "value": 20,
+      "source": "Benchmark: a demo is about 20% of production work; hardening, edge cases, tests and docs are the rest",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "engineer_weekly_cost",
+      "value": 3800,
+      "source": "Payroll export, October 2026 (fictional)",
+      "owner": "human",
+      "isAssumption": false
+    },
+    {
+      "key": "integrations_count",
+      "value": 2,
+      "source": "Stated in the request: \"2 integrations\"",
+      "owner": "human",
+      "isAssumption": false
+    },
+    {
+      "key": "integration_weeks_each",
+      "value": 1,
+      "source": "Benchmark: about one engineer-week each",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "maintenance_pct",
+      "value": 20,
+      "source": "Benchmark: 15 to 25% of build cost a year",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "security_annual",
+      "value": 5000,
+      "source": "Benchmark: a small security review and patching budget",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "hosting_annual",
+      "value": 1200,
+      "source": "Benchmark: about $100 a month for a small internal tool",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "oncall_hours_week",
+      "value": 2,
+      "source": "Benchmark: about two hours a week of support and incidents",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "builder_leaves_pct",
+      "value": 15,
+      "source": "Benchmark: tech staff turnover of about 13 to 18% a year",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "handover_weeks",
+      "value": 4,
+      "source": "Benchmark: about a month to take over an undocumented internal tool",
+      "owner": "agent",
+      "isAssumption": true
+    },
+    {
+      "key": "opportunity_pct",
+      "value": 50,
+      "source": "Head of product's estimate (fictional)",
+      "owner": "human",
+      "isAssumption": true
+    },
+    {
+      "key": "horizon_years",
+      "value": 3,
+      "source": "Default: 3 years, the usual horizon for a software decision",
+      "owner": "agent",
+      "isAssumption": true
+    }
+  ],
+  "gaps": [],
+  "modelsUsed": [
+    {
+      "provider": "demo",
+      "model": "scripted-v2",
+      "task": "extract",
+      "private": false
+    },
+    {
+      "provider": "demo",
+      "model": "scripted-v2",
+      "task": "narrate",
+      "private": false
+    }
+  ],
+  "privateAi": {
+    "privateInference": false,
+    "attestation": null
+  }
 }

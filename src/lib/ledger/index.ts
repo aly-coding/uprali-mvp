@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { AnchorKind, LedgerAnchor, RecordResult } from "../types";
+import type { AnchorKind, LedgerAnchor, RecordResult } from "./types";
 
 export interface RecordArgs {
   hash: string;
@@ -108,3 +108,5 @@ export async function getLedger(env: Env = process.env): Promise<Ledger> {
   cached = { key, ledger };
   return ledger;
 }
+
+export type { AnchorKind, LedgerAnchor, RecordResult } from "./types";

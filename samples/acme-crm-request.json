@@ -1,0 +1,9 @@
+{
+  "question": "Should we build our own CRM or keep paying $720 a year for HubSpot Starter? Our engineer built a working prototype in 3 weeks. It would need 2 integrations, email and billing.",
+  "inputs": {
+    "engineer_weekly_cost": { "value": 3800, "source": "Payroll export, October 2026 (fictional)", "owner": "human" },
+    "opportunity_pct": { "value": 50, "source": "Head of product's estimate (fictional)", "owner": "human", "is_assumption": true }
+  },
+  "approved_by": ["Finance lead (fictional)"],
+  "record": true
+}

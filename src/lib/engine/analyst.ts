@@ -100,6 +100,17 @@ export function demoExtract(question: string): Extracted[] {
   if (m) add("integrations_count", m[1], m[0]);
   m = q.match(/\b(?:pay(?:ing)?\s+(?:for\s+)?|keep(?:\s+paying\s+for)?\s+|buy(?:ing)?\s+|subscribe\s+to\s+|using\s+)([A-Z][\w.&+-]*(?:\s+[A-Z][\w.&+-]*){0,2})/);
   if (m) add("tool_name", m[1], m[0]);
+  if (!out.some((o) => o.key === "tool_name")) {
+    const stop = /^(I|We|Our|The|This|That|It|A|An|My|Us|Year|Month)$/;
+    for (const t of q.matchAll(/\b(?:for|with|from|on)\s+([A-Z][\w.&+-]*(?:\s+[A-Z][\w.&+-]*){0,2})/g)) {
+      if (!stop.test(t[1].split(/\s+/)[0])) {
+        add("tool_name", t[1], t[0]);
+        break;
+      }
+    }
+  }
+  m = q.match(/\bbuild\s+((?:our\s+own|an?|a\s+custom|our)\s+[\w-]+(?:\s+[\w-]+){0,2}?)(?=\s+(?:or|in-house|ourselves|instead)\b|[,.?])/i);
+  if (m) add("what_to_build", m[1], m[0]);
   return out;
 }
 

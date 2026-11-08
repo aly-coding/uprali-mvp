@@ -35,7 +35,7 @@ export async function decide(req: DecideRequest, env: Env = process.env): Promis
   const canCompute = REQUIRED.every((k) => typeof v[k] === "number");
   const years = Math.round(v.horizon_years ?? 3);
   const tool = inputs.find((i) => i.key === "tool_name")?.value;
-  const toolName = typeof tool === "string" && tool ? tool : "the vendor";
+  const toolName = typeof tool === "string" && tool ? tool : "the tool";
   const what = inputs.find((i) => i.key === "what_to_build")?.value;
 
   const gaps = inputs

@@ -220,7 +220,7 @@ export function buildSide(v: Values): Side {
   const lines = [
     line("build_prototype", "Working prototype", once(v.prototype_weeks * w), `${round1(v.prototype_weeks)} engineer-weeks at ${usd0(w)}`, ["prototype_weeks", "engineer_weekly_cost"]),
     line("build_production", "Making it production-ready", once(buildCost - v.prototype_weeks * w), `The prototype is ${v.prototype_share_pct}% of the work, so the full build is ${round1(full)} engineer-weeks`, ["prototype_weeks", "prototype_share_pct", "engineer_weekly_cost"]),
-    line("build_integrations", "Integrations", once(integrationCost), `${v.integrations_count} integrations at ${round1(v.integration_weeks_each)} engineer-weeks each`, ["integrations_count", "integration_weeks_each", "engineer_weekly_cost"]),
+    line("build_integrations", "Integrations", once(integrationCost), `${v.integrations_count} integrations at ${round1(v.integration_weeks_each)} engineer-week${v.integration_weeks_each === 1 ? "" : "s"} each`, ["integrations_count", "integration_weeks_each", "engineer_weekly_cost"]),
     line("build_maintenance", "Upkeep", yearly((v.maintenance_pct / 100) * capex), `${v.maintenance_pct}% of the ${usd0(capex)} build cost each year`, ["maintenance_pct"]),
     line("build_security", "Security and compliance", yearly(v.security_annual), `${usd0(v.security_annual)} a year`, ["security_annual"]),
     line("build_hosting", "Hosting", yearly(v.hosting_annual), `${usd0(v.hosting_annual)} a year`, ["hosting_annual"]),

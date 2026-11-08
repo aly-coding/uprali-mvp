@@ -1,108 +1,124 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { LedgerAnchor } from "@/lib/types";
-import { hashSnapshot, validateSnapshot } from "@/lib/snapshot";
+import { canonicalJson, sha256Hex, validateSnapshot } from "@/lib/engine/snapshot";
+import type { LedgerAnchor } from "@/lib/ledger/types";
 
 interface Result {
-  hash: string;
-  found: boolean;
+  fingerprint: string;
+  recorded: boolean;
   anchor: LedgerAnchor | null;
   network: string;
   contractId: string | null;
+  matches: boolean | null;
+  message: string;
 }
 
-/** Anyone, such as an auditor, can check a decision snapshot against the ledger. The hash is computed in their browser. */
+/**
+ * Anyone, such as an auditor, can check a decision against the ledger. Paste or load the snapshot
+ * and its fingerprint is worked out in this browser, so the check doesn't rest on Uprali's word.
+ */
 export default function Verify() {
   const [text, setText] = useState("");
+  const [fingerprint, setFingerprint] = useState("");
+  const [localHash, setLocalHash] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function check(hash: string) {
+  async function check(snapshotText: string, fp: string) {
     setBusy(true);
-    setError(null);
+    setError("");
     setResult(null);
+    setLocalHash(null);
     try {
-      const res = await fetch("/api/ledger/verify", {
+      let snapshot: unknown;
+      if (snapshotText.trim()) {
+        try {
+          snapshot = JSON.parse(snapshotText);
+        } catch {
+          throw new Error("That isn't valid JSON. Paste the snapshot file exactly as it was downloaded.");
+        }
+        if (!validateSnapshot(snapshot)) throw new Error("That isn't an Uprali decision snapshot.");
+        setLocalHash(await sha256Hex(canonicalJson(snapshot)));
+      }
+      const res = await fetch("/api/v1/decisions/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ hash }),
+        body: JSON.stringify({ snapshot, fingerprint: fp.trim() || undefined }),
       });
-      const data = (await res.json()) as Result & { error?: string };
-      if (!res.ok) throw new Error(data.error || "Couldn't check the ledger.");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't check that.");
       setResult(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't check the ledger.");
+      setError(e instanceof Error ? e.message : "Couldn't check that.");
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    const h = new URLSearchParams(window.location.search).get("hash");
-    if (h && /^[0-9a-f]{64}$/.test(h)) void check(h);
+    const hash = new URLSearchParams(window.location.search).get("hash") || "";
+    if (!/^[0-9a-f]{64}$/.test(hash)) return;
+    setFingerprint(hash);
+    let saved = "";
+    try {
+      saved = localStorage.getItem(`uprali:snapshot:${hash}`) || "";
+    } catch {
+      /* storage off */
+    }
+    if (saved) setText(JSON.stringify(JSON.parse(saved), null, 2));
+    void check(saved, hash);
   }, []);
 
-  async function verifyText(raw: string) {
-    const t = raw.trim();
-    if (/^[0-9a-f]{64}$/.test(t)) return check(t);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(t);
-    } catch {
-      return setError("Paste a decision snapshot (JSON) or a 64-character fingerprint.");
-    }
-    if (!validateSnapshot(parsed)) return setError("That JSON isn't an Uprali decision snapshot.");
-    await check(await hashSnapshot(parsed));
+  async function loadFile(file: File | undefined) {
+    if (!file) return;
+    setText(await file.text());
   }
 
+  const a = result?.anchor;
+  const explorer = result?.network === "near-testnet" && result.contractId ? `https://testnet.nearblocks.io/address/${result.contractId}` : null;
+  const tone = !result ? "" : result.matches === true ? "ok" : result.matches === false ? "bad" : result.recorded ? "ok" : "bad";
+
   return (
-    <div className="page">
-      <section className="panel">
-        <h2>Verify a decision</h2>
-        <p>
-          Drop in the snapshot file you downloaded when the decision was recorded, or paste its fingerprint. The fingerprint is computed here in your browser and looked up on the ledger. If even one number in the snapshot changed, it won't match.
+    <main className="page narrow">
+      <section className="card">
+        <h1>Verify a decision</h1>
+        <p className="muted">
+          Paste a decision snapshot, load its file, or give just its fingerprint. With the snapshot, this page proves nothing in it changed after it
+          was recorded.
         </p>
-        <div className="stack">
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              const t = await f.text();
-              setText(t);
-              await verifyText(t);
-            }}
-          />
-          <textarea className="input" rows={8} placeholder="Snapshot JSON or fingerprint" value={text} onChange={(e) => setText(e.target.value)} />
-          <div>
-            <button className="btn primary" disabled={busy || !text.trim()} onClick={() => verifyText(text)}>
-              {busy ? "Checking…" : "Verify"}
-            </button>
-          </div>
+        <label className="stack">
+          <span>Fingerprint (SHA-256)</span>
+          <input className="input mono" value={fingerprint} onChange={(e) => setFingerprint(e.target.value)} placeholder="64 characters" />
+        </label>
+        <label className="stack">
+          <span>Decision snapshot (JSON)</span>
+          <textarea className="input mono" rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder='{"schema":"uprali.decision.v2", …}' />
+        </label>
+        <div className="row">
+          <input type="file" accept="application/json,.json" onChange={(e) => loadFile(e.target.files?.[0])} />
+          <button className="btn primary" disabled={busy || (!text.trim() && !fingerprint.trim())} onClick={() => check(text, fingerprint)}>
+            {busy ? "Checking…" : "Check"}
+          </button>
         </div>
-        {error && <div className="notice bad">{error}</div>}
+        {error && <p className="error">{error}</p>}
         {result && (
-          <div className={`notice ${result.found ? "good" : "bad"}`} style={{ marginTop: 12 }}>
-            {result.found && result.anchor ? (
-              <>
-                <b>Match.</b> This {result.anchor.kind.replace("_", " ")} for case {result.anchor.caseId}, version {result.anchor.version}, was recorded{" "}
-                {new Date(result.anchor.timestampMs).toLocaleString()} by {result.anchor.recordedBy}
-                {result.network === "near-testnet" ? ` on NEAR testnet (contract ${result.contractId}, block ${result.anchor.blockHeight}).` : " on the local demo ledger, which is not on chain."}
-              </>
-            ) : (
-              <>
-                <b>No match.</b> Either this decision was never recorded, or the snapshot was changed after it was recorded.
-              </>
+          <div className={`verdict-box ${tone}`}>
+            <p><strong>{result.matches === true ? "Match." : result.matches === false ? "No match." : result.recorded ? "Recorded." : "Not recorded."}</strong> {result.message}</p>
+            {localHash && <p className="small muted">Fingerprint worked out in your browser: <code>{localHash}</code></p>}
+            {a && (
+              <ul className="small">
+                <li>Recorded by: <strong>{a.recordedBy}</strong></li>
+                <li>When: {new Date(a.timestampMs).toLocaleString()}</li>
+                <li>Decision: {a.caseId}, version {a.version}, {a.kind}</li>
+                {a.blockHeight !== undefined && <li>Block: {a.blockHeight}</li>}
+                {explorer && <li><a href={explorer} target="_blank" rel="noreferrer">Ledger contract on NEAR testnet</a></li>}
+              </ul>
             )}
-            <div className="hash" style={{ marginTop: 6 }}>
-              {result.hash}
-            </div>
           </div>
         )}
       </section>
-    </div>
+    </main>
   );
 }
