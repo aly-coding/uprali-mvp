@@ -64,8 +64,22 @@ export async function health(env: Env = process.env) {
     ms: number | null;
     keyHasSpaces: boolean;
   } = { keyHasSpaces: Boolean(env.NEARAI_API_KEY && env.NEARAI_API_KEY !== env.NEARAI_API_KEY.trim()), configured: Boolean(ai.apiKey), model: ai.model, baseHost, customBaseUrl: Boolean(env.NEARAI_BASE_URL?.trim()), customModel: Boolean(env.NEARAI_MODEL?.trim()), reachable: null, status: null, error: null, ms: null };
-  if (!ai.apiKey) problems.push("NEARAI_API_KEY isn't set, so the analysis doesn't run on NEAR AI's private inference.");
-  else if (!baseHost) problems.push("NEARAI_BASE_URL isn't a full web address. Delete it in Vercel (the default https://cloud-api.near.ai/v1 is right) and redeploy.");
+  const rawKey = env.NEARAI_API_KEY ?? "";
+  const keyHoldsSetupLines = /NEAR_(CONTRACT_ID|ACCOUNT_ID|PRIVATE_KEY|NETWORK)\s*=/.test(rawKey);
+  const keyMultiLine = /[\r\n]/.test(rawKey.trim());
+  nearAi = { ...nearAi, keyHasSpaces: nearAi.keyHasSpaces || keyMultiLine };
+  if (keyHoldsSetupLines) {
+    nearAi = { ...nearAi, reachable: false, error: "NEARAI_API_KEY holds the /setup lines" };
+    problems.push("NEARAI_API_KEY holds the six lines from the /setup page instead of the NEAR AI key. In Vercel, copy that value into a new variable's Key box (Vercel splits it into six rows), then set NEARAI_API_KEY back to just your NEAR AI Cloud key, and redeploy.");
+  } else if (keyMultiLine) {
+    nearAi = { ...nearAi, reachable: false, error: "NEARAI_API_KEY has more than one line" };
+    problems.push("NEARAI_API_KEY has more than one line in it. Set it to just your NEAR AI Cloud key, and redeploy.");
+  } else if (!ai.apiKey) problems.push("NEARAI_API_KEY isn't set, so the analysis doesn't run on NEAR AI's private inference.");
+  if (keyHoldsSetupLines || keyMultiLine) {
+    /* explained above */
+  } else if (!ai.apiKey) {
+    /* explained above */
+  } else if (!baseHost) problems.push("NEARAI_BASE_URL isn't a full web address. Delete it in Vercel (the default https://cloud-api.near.ai/v1 is right) and redeploy.");
   else {
     const t = Date.now();
     try {
@@ -83,10 +97,10 @@ export async function health(env: Env = process.env) {
         if (ids.length && !ids.includes(ai.model) && nearAi.customModel) problems.push(`NEAR AI doesn't list the model ${ai.model} by that name. Delete NEARAI_MODEL in Vercel to use the default, z-ai/glm-5.3-flash, and redeploy.`);
       }
     } catch (err) {
-      const e = err as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+      // Never echo the error text: fetch puts the header value (the key) into it.
+      const e = err as { name?: string; cause?: { code?: string } };
       const code = e.cause?.code || e.name || "Error";
-      const detail = (e.cause?.message || e.message || "").replace(/(key|token|secret|password)[^\s]*/gi, "[hidden]").slice(0, 120);
-      nearAi = { ...nearAi, reachable: false, error: `${code}: ${detail}`.trim(), ms: Date.now() - t };
+      nearAi = { ...nearAi, reachable: false, error: code, ms: Date.now() - t };
       problems.push(
         e.name === "TimeoutError" || code === "UND_ERR_CONNECT_TIMEOUT"
           ? `NEAR AI Cloud didn't answer within 15 seconds (${baseHost}). It may be down; decisions fall back to Claude or the built-in analyst.`

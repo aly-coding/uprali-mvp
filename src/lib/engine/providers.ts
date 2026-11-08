@@ -28,7 +28,7 @@ export class ProviderError extends Error {}
 export function providerOrder(env: Env = process.env): ProviderName[] {
   const order: ProviderName[] = [];
   const wanted = (env.LLM_PROVIDER || "").toLowerCase();
-  const nearai = !!env.NEARAI_API_KEY?.trim();
+  const nearai = !!nearAiConfig(env).apiKey;
   const anthropic = !!env.ANTHROPIC_API_KEY;
   if (wanted === "demo") return ["demo"];
   if (wanted === "anthropic" && anthropic) order.push("anthropic");
@@ -41,7 +41,8 @@ export function providerOrder(env: Env = process.env): ProviderName[] {
 export function nearAiConfig(env: Env = process.env) {
   return {
     // Trimmed: a key pasted with a stray space or line break makes fetch throw before it sends anything.
-    apiKey: env.NEARAI_API_KEY?.trim() || undefined,
+    // A value with spaces or line breaks inside isn't a key (for example the /setup lines pasted here by mistake): never send it.
+    apiKey: env.NEARAI_API_KEY?.trim() && !/\s/.test(env.NEARAI_API_KEY.trim()) ? env.NEARAI_API_KEY.trim() : undefined,
     baseUrl: (env.NEARAI_BASE_URL?.trim() || "https://cloud-api.near.ai/v1").replace(/\/+$/, ""),
     model: env.NEARAI_MODEL?.trim() || "z-ai/glm-5.3-flash",
   };

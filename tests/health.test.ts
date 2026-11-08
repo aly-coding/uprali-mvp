@@ -16,4 +16,14 @@ describe("health page", () => {
     expect(h.near.missing).toContain("NEAR_PRIVATE_KEY");
     expect(h.database.kind).toBe("memory");
   });
+
+  it("spots the /setup lines pasted into NEARAI_API_KEY and never shows them", async () => {
+    const pasted = "NEAR_NETWORK=testnet\nNEAR_CONTRACT_ID=uprali-ledger-x.testnet\nNEAR_PRIVATE_KEY=ed25519:5ecretValueThatMustNotShow";
+    const h = (await health({ NEARAI_API_KEY: pasted } as Record<string, string>)) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const out = JSON.stringify(h);
+    expect(out).not.toContain("5ecretValueThatMustNotShow");
+    expect(out).not.toContain("uprali-ledger-x");
+    expect(h.problems.join(" ")).toMatch(/holds the six lines from the \/setup page/);
+    expect(h.nearAi.configured).toBe(false);
+  });
 });

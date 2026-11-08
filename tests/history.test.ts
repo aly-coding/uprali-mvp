@@ -85,7 +85,10 @@ describe("sessions", () => {
   it("accepts its own token and rejects changed or expired ones", () => {
     const t = makeSession("alice.testnet", env);
     expect(readSession(t, env)).toBe("alice.testnet");
-    expect(readSession(t.replace(/.$/, (c) => (c === "A" ? "B" : "A")), env)).toBeNull();
+    // Change a character in the middle of the signature (the last one can be base64 padding bits).
+    const sig = t.split(".")[2];
+    const bad = sig.slice(0, 10) + (sig[10] === "A" ? "B" : "A") + sig.slice(11);
+    expect(readSession(t.replace(sig, bad), env)).toBeNull();
     expect(readSession(t, { SESSION_SECRET: "another-secret-0123456789" })).toBeNull();
     expect(readSession(t, env, Date.now() + 31 * 86_400_000)).toBeNull();
     const forged = `v1.${Buffer.from(JSON.stringify({ a: "bob.testnet", e: Date.now() + 1e9 })).toString("base64url")}.${t.split(".")[2]}`;
