@@ -25,8 +25,7 @@ export default function Verify() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [isSample, setIsSample] = useState(false);
-  const [tampered, setTampered] = useState(false);
+  const [original, setOriginal] = useState<string | null>(null);
 
   async function check(snapshotText: string, fp: string) {
     setBusy(true);
@@ -64,7 +63,6 @@ export default function Verify() {
     const hash = params.get("hash") || "";
     if (params.get("sample") === "1") {
       // The judge path: load the sample's snapshot from the server, then check it here.
-      setIsSample(true);
       fetch("/api/sample")
         .then((r) => r.json())
         .then((data) => {
@@ -95,8 +93,8 @@ export default function Verify() {
       if (snap.totals && typeof snap.totals.build === "number") snap.totals.build -= 50_000;
       else snap.title = `${snap.title} (edited)`;
       const changed = JSON.stringify(snap, null, 2);
+      setOriginal(text);
       setText(changed);
-      setTampered(true);
       void check(changed, fingerprint);
     } catch {
       setError("The snapshot isn't valid JSON.");
@@ -135,12 +133,12 @@ export default function Verify() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
-        {isSample && result && text.trim() && (
+        {(result?.recorded || original !== null) && text.trim() && (
           <p className="row">
-            {!tampered ? (
+            {original === null ? (
               <button className="btn" onClick={tamper} disabled={busy}>Try to cheat: make building $50,000 cheaper</button>
             ) : (
-              <a className="btn" href="/verify?sample=1">Put the real snapshot back</a>
+              <button className="btn" disabled={busy} onClick={() => { const t = original; setOriginal(null); setText(t); void check(t, fingerprint); }}>Put the real snapshot back</button>
             )}
           </p>
         )}
