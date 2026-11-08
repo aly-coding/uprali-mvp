@@ -331,3 +331,15 @@ div.warn { border: 1px solid var(--warn); border-radius: 8px; padding: 8px 10px;
 .save-near details {
   margin-top: 8px;
 }
+
+.start-steps {
+  text-align: left;
+  padding-left: 22px;
+  margin: 12px 0;
+}
+.start-steps > li {
+  margin-bottom: 16px;
+}
+.start-steps > li > div {
+  margin: 10px 0 6px;
+}

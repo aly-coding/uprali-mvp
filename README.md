@@ -40,8 +40,8 @@ The models only read the numbers stated in the question and write the prose. Cod
 
 The live app uses **NEAR wallet sign-in**, so each decision you make is saved to your history and recorded on NEAR under your own account.
 
-1. Open the live app and pick **Buy vs Build**. Uprali asks you to connect a NEAR testnet wallet first: pick Intear or Meteor.
-2. Keep the example question and press **Run the decision**. **You should see** the memo, where every number shows its source and owner.
+1. Open the live app and press **Connect NEAR wallet** (step 1 on the first page). Pick Intear or Meteor.
+2. Pick **Buy vs Build**, keep the example question and press **Run the decision**. **You should see** the memo, where every number shows its source and owner.
    Ran a decision before signing in? Press **Connect NEAR wallet to save** under the result: you come straight back to it, then press **Sign and record**. The live site never saves to a throwaway ledger.
 3. Press **Sign and record as** your account and approve in the wallet. **You should see** "Recorded on NEAR testnet" and **See the transaction on the NEAR explorer**.
 4. Press **See it in History**, open the decision and press **Verify**. **You should see** **Match**. Press **Try to cheat: make building $50,000 cheaper** and it turns into **No match**.

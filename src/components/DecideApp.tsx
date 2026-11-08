@@ -165,9 +165,9 @@ export function DecideApp() {
       .then((r) => r.json())
       .then(async (c: Config) => {
         setConfig(c);
-        if (!c.wallet) return;
+        // Wallet sign-in works without the ledger; only recording needs the ledger contract.
         try {
-          const w = await initWallet(c.wallet);
+          const w = await initWallet(c.wallet ?? { networkId: "testnet" });
           setWallet(w);
           setAccount(signedInAccount(w));
           const sub = w.selector.store.observable.subscribe(() => setAccount(signedInAccount(w)));
@@ -223,7 +223,8 @@ export function DecideApp() {
   }
 
   const who = account ?? (demo ? "demo-user" : null);
-  const needsWallet = Boolean(config?.wallet && !account);
+  // On the live site everyone connects a wallet first; the throwaway demo is only for running it on your own computer.
+  const needsWallet = Boolean(config && !config.localDemo && !account);
   const groups = useMemo(() => {
     const order: FieldGroup[] = ["buy", "build", "value", "general"];
     return order
@@ -271,7 +272,7 @@ export function DecideApp() {
   }
 
   async function run() {
-    if (config?.wallet && !account) {
+    if (needsWallet) {
       // Sign in first, so the result can be saved on NEAR. The run starts as soon as the wallet connects.
       if (!wallet) return setError("NEAR wallet sign-in is still loading. Try again in a moment.");
       saveAfterSignIn({ template, run: true, question, values });
@@ -392,21 +393,36 @@ export function DecideApp() {
             Every spend decision gets a memo where each number shows its source and owner, a human sign-off, and a proof on NEAR. The analysis runs
             privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product, expand into a new market, or invest in AI.
           </p>
-          {config.wallet ? (
+          {config.localDemo ? (
             <>
-              <p className="small"><strong>Pick a decision to start.</strong> Uprali asks you to connect your NEAR testnet wallet first, so every result can be signed and saved on NEAR under your account.</p>
-              <TemplatePicker value={null} onPick={startWithWallet} />
-              <div className="judges small">
-                <strong>Judging?</strong> Pick any decision and connect a NEAR testnet wallet (Intear or Meteor). Run it, press <strong>Sign and record</strong>, then open
-                History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
-                <TestnetHelp />
-              </div>
+              <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
+              <p className="muted small">Running on your own computer: decisions go to a local demo ledger.</p>
+              <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
             </>
           ) : (
             <>
-              <TemplatePicker value={null} onPick={(t) => { pick(t); setDemo(true); }} />
-              <p className="muted small">NEAR wallet sign-in turns on once the ledger is on testnet. Owner? <a href="/setup">Set it up</a>.</p>
-              <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
+              <ol className="start-steps">
+                <li>
+                  <strong>Connect your NEAR testnet wallet.</strong> It&apos;s how you sign each decision and keep your history.
+                  <div>
+                    <button className="btn primary big" onClick={() => wallet?.modal.show()} disabled={!wallet}>
+                      {wallet ? "Connect NEAR wallet" : "Loading NEAR wallet…"}
+                    </button>
+                  </div>
+                  {!config.wallet && (
+                    <p className="muted small">You can connect and run decisions now. Saving them on NEAR switches on once the site owner finishes the one-time setup.</p>
+                  )}
+                  <TestnetHelp />
+                </li>
+                <li>
+                  <strong>Pick a decision.</strong> If you pick one first, Uprali asks for the wallet and then opens it.
+                  <TemplatePicker value={null} onPick={startWithWallet} />
+                </li>
+              </ol>
+              <div className="judges small">
+                <strong>Judging?</strong> Connect a NEAR testnet wallet (Intear or Meteor), pick any decision and run it, press <strong>Sign and record</strong>, then open
+                History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
+              </div>
             </>
           )}
           {error && <p className="error">{error}</p>}
@@ -432,7 +448,7 @@ export function DecideApp() {
           )}
           <div className="row">
             <button className="btn small" onClick={async () => { if (wallet) await signOut(wallet); await endHistorySession(); setHistoryAccount(null); }}>Sign out</button>
-            {historyAccount !== account && (
+            {config.wallet && historyAccount !== account && (
               <button
                 className="btn small"
                 title="A free signature, nothing goes on chain. Your runs then follow your account to any device."
@@ -454,7 +470,7 @@ export function DecideApp() {
         </>
       ) : (
         <>
-          <span><strong>Demo mode</strong></span>
+          <span><strong>{config.localDemo ? "Demo mode" : "Not signed in"}</strong></span>
           <span className="muted">
             {config.wallet
               ? config.relayerCodeEnabled
@@ -462,9 +478,9 @@ export function DecideApp() {
                 : "Sign in with a NEAR wallet to record on testnet."
               : config.localDemo
                 ? "Running on this computer: decisions are recorded on a local demo ledger."
-                : "Saving on NEAR isn't switched on for this site yet."}
+                : "Connect a NEAR testnet wallet to run decisions."}
           </span>
-          {config.wallet && <button className="btn small" onClick={() => wallet?.modal.show()}>Sign in with NEAR wallet</button>}
+          {wallet && <button className="btn small" onClick={() => wallet.modal.show()}>Connect NEAR wallet</button>}
         </>
       )}
     </div>
@@ -616,6 +632,13 @@ export function DecideApp() {
                           </div>
                         ) : result.memo.status === "needs_human" ? (
                           <p className="muted">Fill in the numbers marked &quot;Needs a human&quot; before recording.</p>
+                        ) : account && !config.wallet ? (
+                          <div className="save-near">
+                            <p className="muted">
+                              Saving on NEAR isn&apos;t switched on for this site yet, so this decision can&apos;t be recorded here. The site owner sets it up once on the <a href="/setup">Setup</a> page. You can still download the snapshot.
+                            </p>
+                            <div className="row"><button className="btn" onClick={download}>Download snapshot</button></div>
+                          </div>
                         ) : account ? (
                           <div className="row">
                             <button className="btn primary" onClick={record} disabled={busy !== ""}>
@@ -623,7 +646,7 @@ export function DecideApp() {
                             </button>
                             <button className="btn" onClick={download}>Download snapshot</button>
                           </div>
-                        ) : config.wallet ? (
+                        ) : !config.localDemo ? (
                           <div className="save-near">
                             <p>
                               <strong>Want to save this decision?</strong> Connect your NEAR testnet wallet first. You&apos;ll come straight back to this result and record it with one click.
