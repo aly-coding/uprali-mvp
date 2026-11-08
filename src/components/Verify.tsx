@@ -25,6 +25,8 @@ export default function Verify() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isSample, setIsSample] = useState(false);
+  const [tampered, setTampered] = useState(false);
 
   async function check(snapshotText: string, fp: string) {
     setBusy(true);
@@ -58,7 +60,22 @@ export default function Verify() {
   }
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.search).get("hash") || "";
+    const params = new URLSearchParams(window.location.search);
+    const hash = params.get("hash") || "";
+    if (params.get("sample") === "1") {
+      // The judge path: load the sample's snapshot from the server, then check it here.
+      setIsSample(true);
+      fetch("/api/sample")
+        .then((r) => r.json())
+        .then((data) => {
+          const snap = JSON.stringify(data.decision.snapshot, null, 2);
+          setFingerprint(data.decision.fingerprint);
+          setText(snap);
+          void check(snap, data.decision.fingerprint);
+        })
+        .catch(() => setError("Couldn't load the sample decision."));
+      return;
+    }
     if (!/^[0-9a-f]{64}$/.test(hash)) return;
     setFingerprint(hash);
     let saved = "";
@@ -70,6 +87,21 @@ export default function Verify() {
     if (saved) setText(JSON.stringify(JSON.parse(saved), null, 2));
     void check(saved, hash);
   }, []);
+
+  /** Makes building look $50,000 cheaper in the snapshot, then checks again: the fingerprint no longer matches. */
+  function tamper() {
+    try {
+      const snap = JSON.parse(text);
+      if (snap.totals && typeof snap.totals.build === "number") snap.totals.build -= 50_000;
+      else snap.title = `${snap.title} (edited)`;
+      const changed = JSON.stringify(snap, null, 2);
+      setText(changed);
+      setTampered(true);
+      void check(changed, fingerprint);
+    } catch {
+      setError("The snapshot isn't valid JSON.");
+    }
+  }
 
   async function loadFile(file: File | undefined) {
     if (!file) return;
@@ -103,6 +135,15 @@ export default function Verify() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+        {isSample && result && text.trim() && (
+          <p className="row">
+            {!tampered ? (
+              <button className="btn" onClick={tamper} disabled={busy}>Try to cheat: make building $50,000 cheaper</button>
+            ) : (
+              <a className="btn" href="/verify?sample=1">Put the real snapshot back</a>
+            )}
+          </p>
+        )}
         {result && (
           <div className={`verdict-box ${tone}`}>
             <p><strong>{result.matches === true ? "Match." : result.matches === false ? "No match." : result.recorded ? "Recorded." : "Not recorded."}</strong> {result.message}</p>

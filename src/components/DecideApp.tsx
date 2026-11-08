@@ -212,6 +212,7 @@ export function DecideApp() {
           ) : (
             <p className="muted small">NEAR wallet sign-in turns on once the ledger is on testnet. Owner? <a href="/setup">Set it up</a>.</p>
           )}
+          <a className="btn" href="/sample">Judging? See a verified sample in 30 seconds, no wallet</a>
           <button className="btn" onClick={() => setDemo(true)}>Continue in demo mode</button>
           {error && <p className="error">{error}</p>}
         </section>

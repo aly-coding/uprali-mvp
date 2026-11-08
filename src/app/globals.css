@@ -135,3 +135,4 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .history .link { text-align: left; }
 .history .verdict { display: inline-block; font-size: 13px; }
 @media (max-width: 640px) { .history th:nth-child(4), .history td:nth-child(4) { display: none; } }
+a.btn { text-decoration: none; display: inline-block; text-align: center; }
