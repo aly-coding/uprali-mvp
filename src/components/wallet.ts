@@ -1,45 +1,86 @@
 "use client";
 
 /**
- * NEAR wallet sign-in for the demo screen, on testnet only. Signing in creates a key that may
- * only call the ledger's `record` method with no deposit, so recording a decision costs the
- * person nothing and asks for no extra approval.
+ * NEAR wallet sign-in, with a mainnet (name.near) or a testnet (name.testnet) account. The
+ * decision ledger is on testnet. On testnet, signing in creates a key that may only call the
+ * ledger's `record` method with no deposit, so recording costs the person nothing. A mainnet
+ * account can't sign on testnet, so it signs a free sign-in message instead and the server's
+ * relayer records the fingerprint of the decision made in its name.
  */
 import type { WalletSelector } from "@near-wallet-selector/core";
 import type { WalletSelectorModal } from "@near-wallet-selector/modal-ui";
+import { explorerAccountUrl, isWalletNetwork, type WalletNetwork } from "@/lib/nearNetwork";
 
 export interface WalletConfig {
-  networkId: "testnet";
-  /** The ledger contract. Leave it out on the setup page, before the contract exists. */
+  networkId: WalletNetwork;
+  /** The testnet ledger contract. Leave it out on the setup page, before the contract exists, and on mainnet. */
   contractId?: string;
 }
 
 export interface WalletHandle {
   selector: WalletSelector;
   modal: WalletSelectorModal;
+  networkId: WalletNetwork;
+  /** The ledger contract this wallet can record on itself: only on testnet. */
   contractId: string | null;
 }
 
-/** Intear and Meteor both still work on testnet (MyNearWallet's testnet is retired). */
+const NETWORK_KEY = "uprali:wallet-network";
+
+/** The network the person picked last time. Mainnet by default, since most people have a .near account. */
+export function chosenNetwork(): WalletNetwork {
+  try {
+    const v = localStorage.getItem(NETWORK_KEY);
+    if (isWalletNetwork(v)) return v;
+  } catch {
+    /* storage off */
+  }
+  return "mainnet";
+}
+
+/** Switches the network. The wallet selector holds one network per page, so the page reloads. */
+export async function switchNetwork(w: WalletHandle | null, next: WalletNetwork): Promise<void> {
+  if (w && w.networkId === next) return;
+  if (w && signedInAccount(w)) await signOut(w).catch(() => undefined);
+  await endHistorySession();
+  try {
+    localStorage.setItem(NETWORK_KEY, next);
+  } catch {
+    /* storage off: stays on the default */
+  }
+  window.location.reload();
+}
+
+/** The wallet setup for a page, from /api/config's `wallet` (the testnet ledger) and the person's chosen network. */
+export function walletConfigFor(ledger: { contractId: string } | null, network: WalletNetwork = chosenNetwork()): WalletConfig {
+  return network === "testnet" && ledger ? { networkId: "testnet", contractId: ledger.contractId } : { networkId: network };
+}
+
+/** Intear and Meteor work on both networks; MyNearWallet on mainnet only (its testnet is retired). */
 export async function initWallet(cfg: WalletConfig): Promise<WalletHandle> {
-  const [{ setupWalletSelector }, { setupModal }, { setupIntearWallet }, { setupMeteorWallet }] = await Promise.all([
+  const [{ setupWalletSelector }, { setupModal }, { setupIntearWallet }, { setupMeteorWallet }, { setupMyNearWallet }] = await Promise.all([
     import("@near-wallet-selector/core"),
     import("@near-wallet-selector/modal-ui"),
     import("@near-wallet-selector/intear-wallet"),
     import("@near-wallet-selector/meteor-wallet"),
+    import("@near-wallet-selector/my-near-wallet"),
   ]);
+  const contractId = cfg.networkId === "testnet" ? cfg.contractId : undefined;
   const selector = await setupWalletSelector({
     network: cfg.networkId,
-    modules: [setupIntearWallet(), setupMeteorWallet()],
-    ...(cfg.contractId ? { createAccessKeyFor: { contractId: cfg.contractId, methodNames: ["record"] } } : {}),
+    modules: [setupIntearWallet(), setupMeteorWallet(), ...(cfg.networkId === "mainnet" ? [setupMyNearWallet()] : [])],
+    ...(contractId ? { createAccessKeyFor: { contractId, methodNames: ["record"] } } : {}),
   });
   const modal = setupModal(selector, {
-    ...(cfg.contractId ? { contractId: cfg.contractId, methodNames: ["record"] } : {}),
-    description: cfg.contractId
-      ? "Sign in with a NEAR testnet account. Uprali only asks to record decision fingerprints, never to move money."
-      : "Sign in with the NEAR testnet account that will own the Uprali ledger.",
+    ...(contractId ? { contractId, methodNames: ["record"] } : {}),
+    description:
+      cfg.networkId === "mainnet"
+        ? "Sign in with your NEAR account (name.near). Uprali asks for one free signed message to confirm it's you, never to move money."
+        : contractId
+          ? "Sign in with a NEAR testnet account (name.testnet). Uprali only asks to record decision fingerprints, never to move money."
+          : "Sign in with the NEAR testnet account that will own the Uprali ledger.",
   });
-  return { selector, modal, contractId: cfg.contractId ?? null };
+  return { selector, modal, networkId: cfg.networkId, contractId: contractId ?? null };
 }
 
 export function signedInAccount(w: WalletHandle): string | null {
@@ -57,6 +98,7 @@ export async function recordWithWallet(
   w: WalletHandle,
   args: { hash: string; kind: string; caseId: string; version: number },
 ): Promise<{ txHash: string | null }> {
+  if (w.networkId !== "testnet") throw new Error("Only a testnet wallet can sign on the testnet ledger. Mainnet accounts record through Uprali's relayer.");
   if (!w.contractId) throw new Error("No ledger contract is set up yet.");
   const { actionCreators } = await import("@near-js/transactions");
   const wallet = await w.selector.wallet();
@@ -82,8 +124,8 @@ export function explorerTx(txHash: string): string {
   return `https://testnet.nearblocks.io/txns/${txHash}`;
 }
 
-export function explorerAccount(accountId: string): string {
-  return `https://testnet.nearblocks.io/address/${accountId}`;
+export function explorerAccount(accountId: string, network?: WalletNetwork): string {
+  return explorerAccountUrl(accountId, network);
 }
 
 /**
@@ -103,7 +145,7 @@ export async function confirmHistorySignIn(w: WalletHandle): Promise<{ account: 
   const res = await fetch("/api/app/session", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, nonce }),
+    body: JSON.stringify({ accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, nonce, network: w.networkId }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Couldn't confirm the sign-in.");

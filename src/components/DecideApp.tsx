@@ -11,8 +11,8 @@ import { CASE_TABS, CaseForm, CaseMemoView, CaseTable, TemplatePicker, templateT
 import { MemoView, PrivateAiBadge } from "./MemoView";
 import { Advisor } from "./Advisor";
 import { MicButton, ReadAloud, VOICE_ON, appendSpoken } from "./Voice";
-import { TestnetHelp, TestnetSteps, isMainnetAccount } from "./TestnetHelp";
-import { confirmHistorySignIn, endHistorySession, explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
+import { NetworkPicker, NetworkNote } from "./TestnetHelp";
+import { chosenNetwork, confirmHistorySignIn, endHistorySession, explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, walletConfigFor, type WalletHandle } from "./wallet";
 
 interface Config {
   providers: string[];
@@ -167,7 +167,7 @@ export function DecideApp() {
         setConfig(c);
         // Wallet sign-in works without the ledger; only recording needs the ledger contract.
         try {
-          const w = await initWallet(c.wallet ?? { networkId: "testnet" });
+          const w = await initWallet(walletConfigFor(c.wallet, chosenNetwork()));
           setWallet(w);
           setAccount(signedInAccount(w));
           const sub = w.selector.store.observable.subscribe(() => setAccount(signedInAccount(w)));
@@ -342,13 +342,20 @@ export function DecideApp() {
     setError("");
     const s = result.snapshot;
     try {
-      if (wallet && account) {
+      if (wallet && account && wallet.networkId === "testnet") {
         const { txHash } = await recordWithWallet(wallet, { hash: result.fingerprint, kind: s.kind, caseId: s.decisionId, version: s.version });
         setRecorded({ by: account, txUrl: txHash ? explorerTx(txHash) : null, verifyUrl: result.verifyUrl, network: "NEAR testnet" });
         takePending();
         // Let the history see it on the ledger. The server looks the fingerprint up itself.
         if (result.runId) await markInHistory(result.runId, txHash);
       } else {
+        // A mainnet (name.near) account can't sign on the testnet ledger. It proves it's this
+        // account with a free signed message, then Uprali's relayer records the fingerprint.
+        const viaAccount = Boolean(wallet && account && !code);
+        if (viaAccount && wallet && historyAccount !== account) {
+          const r = await confirmHistorySignIn(wallet);
+          setHistoryAccount(r.account);
+        }
         const res = await fetch("/api/app/record", {
           method: "POST",
           headers: { "content-type": "application/json", ...(code ? { "x-access-code": code } : {}) },
@@ -356,8 +363,9 @@ export function DecideApp() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Couldn't record the decision.");
+        takePending();
         setRecorded({
-          by: data.anchor.recordedBy,
+          by: viaAccount && account ? `${account} (recorded by ${data.anchor.recordedBy})` : data.anchor.recordedBy,
           txUrl: data.explorerUrl ?? null,
           verifyUrl: data.verifyUrl,
           network: data.network === "near-testnet" ? "NEAR testnet" : "the local demo ledger",
@@ -403,7 +411,8 @@ export function DecideApp() {
             <>
               <ol className="start-steps">
                 <li>
-                  <strong>Connect your NEAR testnet wallet.</strong> It&apos;s how you sign each decision and keep your history.
+                  <strong>Connect your NEAR wallet.</strong> A .near or a .testnet account both work. It&apos;s how you sign each decision and keep your history.
+                  <NetworkPicker wallet={wallet} />
                   <div>
                     <button className="btn primary big" onClick={() => wallet?.modal.show()} disabled={!wallet}>
                       {wallet ? "Connect NEAR wallet" : "Loading NEAR wallet…"}
@@ -412,7 +421,7 @@ export function DecideApp() {
                   {!config.wallet && (
                     <p className="muted small">You can connect and run decisions now. Saving them on NEAR switches on once the site owner finishes the one-time setup.</p>
                   )}
-                  <TestnetHelp />
+                  <NetworkNote network={wallet?.networkId ?? chosenNetwork()} />
                 </li>
                 <li>
                   <strong>Pick a decision.</strong> If you pick one first, Uprali asks for the wallet and then opens it.
@@ -420,7 +429,7 @@ export function DecideApp() {
                 </li>
               </ol>
               <div className="judges small">
-                <strong>Judging?</strong> Connect a NEAR testnet wallet (Intear or Meteor), pick any decision and run it, press <strong>Sign and record</strong>, then open
+                <strong>Judging?</strong> Connect a NEAR wallet (a .near or .testnet account, with Intear, Meteor or MyNearWallet), pick any decision and run it, press <strong>Sign and record</strong>, then open
                 History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
               </div>
             </>
@@ -439,12 +448,12 @@ export function DecideApp() {
     <div className="side-who small">
       {account ? (
         <>
-          <span>Signed in as <a href={explorerAccount(account)} target="_blank" rel="noreferrer"><strong>{account}</strong></a></span>
-          {isMainnetAccount(account) && (
-            <div className="warn">
-              <p><strong>{account} is a mainnet account.</strong> Uprali records on NEAR testnet, where this account doesn&apos;t exist, so recording would fail. Sign out and use a free .testnet account:</p>
-              <TestnetSteps />
-            </div>
+          <span>
+            Signed in as <a href={explorerAccount(account, wallet?.networkId)} target="_blank" rel="noreferrer"><strong>{account}</strong></a>{" "}
+            <span className="muted">on {wallet?.networkId === "mainnet" ? "mainnet" : "testnet"}</span>
+          </span>
+          {wallet?.networkId === "mainnet" && (
+            <p className="muted">Your decisions are signed as {account}. Uprali&apos;s relayer puts their fingerprints on the NEAR testnet ledger for you, at no cost.</p>
           )}
           <div className="row">
             <button className="btn small" onClick={async () => { if (wallet) await signOut(wallet); await endHistorySession(); setHistoryAccount(null); }}>Sign out</button>
@@ -475,11 +484,12 @@ export function DecideApp() {
             {config.wallet
               ? config.relayerCodeEnabled
                 ? "Recording on NEAR testnet needs a wallet sign-in or the access code."
-                : "Sign in with a NEAR wallet to record on testnet."
+                : "Sign in with a NEAR wallet (.near or .testnet) to record decisions."
               : config.localDemo
                 ? "Running on this computer: decisions are recorded on a local demo ledger."
-                : "Connect a NEAR testnet wallet to run decisions."}
+                : "Connect a NEAR wallet (.near or .testnet) to run decisions."}
           </span>
+          {!config.localDemo && <NetworkPicker wallet={wallet} />}
           {wallet && <button className="btn small" onClick={() => wallet.modal.show()}>Connect NEAR wallet</button>}
         </>
       )}
@@ -649,13 +659,13 @@ export function DecideApp() {
                         ) : !config.localDemo ? (
                           <div className="save-near">
                             <p>
-                              <strong>Want to save this decision?</strong> Connect your NEAR testnet wallet first. You&apos;ll come straight back to this result and record it with one click.
+                              <strong>Want to save this decision?</strong> Connect your NEAR wallet first (.near or .testnet). You&apos;ll come straight back to this result and record it with one click.
                             </p>
                             <div className="row">
                               <button className="btn primary" onClick={connectToSave} disabled={!wallet || busy !== ""}>Connect NEAR wallet to save</button>
                               <button className="btn" onClick={download}>Download snapshot</button>
                             </div>
-                            <TestnetHelp />
+                            <NetworkPicker wallet={wallet} />
                             {config.relayerCodeEnabled && (
                               <details className="small">
                                 <summary>Have the demo access code instead?</summary>
