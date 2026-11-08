@@ -165,11 +165,12 @@ You don't need to touch code. Each step is a few clicks; the terminal steps can 
 
 1. **GitHub.** The code lives in the public repo `aly-coding/uprali-mvp`.
 2. **NEAR AI Cloud key.** Sign up at NEAR AI Cloud and create an API key. Keep it to yourself: you'll paste it into Vercel in step 5, never into a chat.
-3. **A NEAR testnet wallet for you.** Done: you made `uprali.testnet` in Intear Wallet. Meteor Wallet also works on testnet. (MyNearWallet's testnet is retired.) You need about 3.5 testnet NEAR in it for step 4; testnet NEAR is free from the faucet in your wallet or at near-faucet.io.
-4. **The ledger, from your browser (2 minutes, no terminal).** Open the live app at `/setup`.
-   - Press **Sign in with NEAR wallet**, pick **Intear Wallet**, sign in as `uprali.testnet`.
-   - Press **Create the ledger** and approve the one request in Intear. It creates two accounts of yours: `ledger.uprali.testnet` holds the contract, and `relayer.uprali.testnet` records for agents and for the no-wallet fallback.
-   - The page then puts the contract on `ledger.uprali.testnet` and locks it, so nobody can change it. The relayer's key can only record decisions, nothing else, and is made in your browser; it never goes to the server or into a chat.
+3. **A NEAR testnet wallet for you.** Done: you made `uprali.testnet` in Intear Wallet. Meteor Wallet also works on testnet. It doesn't need any testnet NEAR: it only signs in and becomes the ledger's owner.
+4. **The ledger, from your browser (2 minutes, no terminal, no testnet NEAR).** Open the live app at `/setup`.
+   - Press **Sign in with NEAR wallet** and sign in as `uprali.testnet`, or just type `uprali.testnet` in **Owner account**.
+   - Press **Create the ledger**. There's nothing to approve: NEAR's testnet faucet service (the one `near-cli`'s `sponsor-by-faucet-service` uses, no CAPTCHA) creates and funds two new accounts, `uprali-ledger-<code>.testnet` for the contract and `uprali-relayer-<code>.testnet` for recording. Our server passes on only their public keys; the keys themselves are made in your browser and never leave it.
+   - The page then puts the contract on the ledger account and deletes its only key, so nobody can change it. It swaps the relayer's key for one that can only record decisions, with up to 1 NEAR of fees.
+   - If it stops partway, press the button again; it picks up where it stopped.
    - **You should see** six lines to copy. Press **Copy all six**.
 5. **Vercel.** In the Vercel project, open **Settings → Environment Variables**, click into the first **Key** box and paste: Vercel splits the six lines into six rows (`NEAR_NETWORK`, `NEAR_CONTRACT_ID`, `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `RECORD_ACCESS_CODE`, `UPRALI_API_KEYS`). Keep **Production** ticked and press **Save**. `NEARAI_API_KEY` from step 2 should already be there. `ANTHROPIC_API_KEY` is optional, so Claude can step in if NEAR AI is down.
 
@@ -197,9 +198,9 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 ## What's tested, and what isn't yet
 
-Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 55 tests, including the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
+Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 59 tests, including the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, and the Slack app's signature checks, command, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
 
-**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's wallet request and contract deploy, and the Slack app against real Slack. Run the demo script once on the live deploy before recording the video.
+**Not tested yet**, because this build machine can't reach NEAR or NEAR AI: live NEAR AI Cloud calls and its live attestation report, live Claude calls, the contract deploy script and recording on testnet, wallet sign-in and signing in a real browser, the `/setup` page's faucet request and contract deploy, and the Slack app against real Slack. Run the demo script once on the live deploy before recording the video.
 
 `npm audit` reports one high finding left in Meteor Wallet's SDK (`decode-uri-component` under `query-string` 7). The SDK only calls `stringify`, never the decoder the advisory is about, and the newer `query-string` breaks its import, so it stays until Meteor updates.
 

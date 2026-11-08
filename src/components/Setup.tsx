@@ -1,41 +1,47 @@
 "use client";
 
 /**
- * One-time owner setup, with no terminal: the owner signs in with their NEAR testnet wallet and
- * approves one request that creates two sub-accounts of theirs:
- *   ledger.<owner>   holds the ledger contract. This page deploys it with a one-use key, then deletes
- *                    that key, so nobody (the owner included) can change the contract afterwards.
- *   relayer.<owner>  records for agents and for the access-code fallback. Its only key can call the
- *                    ledger's `record` method and nothing else, with a small gas allowance.
- * The keys are made in this browser and never sent anywhere; the relayer key is shown once to paste
- * into Vercel. Testnet only.
+ * One-time owner setup, with no terminal and no testnet NEAR of the owner's own. NEAR's testnet
+ * faucet service creates and funds two accounts (through /api/setup/sponsor, which passes on
+ * only public keys):
+ *   uprali-ledger-<code>.testnet   holds the ledger contract. This page deploys it with the
+ *                                  account's only key, then deletes that key, so nobody (the
+ *                                  owner included) can change the contract afterwards.
+ *   uprali-relayer-<code>.testnet  records for agents and for the access-code fallback. This page
+ *                                  swaps its first key for one that can only call the ledger's
+ *                                  `record` method, with a gas allowance.
+ * The owner's wallet account (for example uprali.testnet) becomes the ledger's owner and is only
+ * used to sign in. The keys are made in this browser and never sent anywhere; the relayer key is
+ * shown once to paste into Vercel. Testnet only.
  */
 import { useEffect, useRef, useState } from "react";
 import {
-  LEDGER_FUND_NEAR,
-  NEEDED_NEAR,
+  LEDGER_MIN_NEAR,
   RELAYER_ALLOWANCE_NEAR,
-  RELAYER_FUND_NEAR,
   envBlock,
   randomCode,
-  setupNames,
+  sponsoredNames,
+  validOwner,
   yoctoToNear,
 } from "@/lib/setup";
 import { explorerAccount, initWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
 
 const RPC = "https://test.rpc.fastnear.com";
-const STORE = "uprali:setup:v1";
+const STORE = "uprali:setup:v2";
 const EMPTY_CODE = "11111111111111111111111111111111";
 
 interface Saved {
   owner: string;
   ledgerId: string;
   relayerId: string;
-  deployKey: string | null; // deleted from the ledger account (and from here) once the contract is in
+  ledgerKey: string | null; // the ledger's only key; deleted from the account (and from here) once the contract is in
+  relayerSetupKey: string | null; // the relayer's first key; swapped for relayerKey, then forgotten
   relayerKey: string;
   accessCode: string;
   apiKey: string;
-  created: boolean;
+  ledgerCreated: boolean;
+  relayerCreated: boolean;
+  relayerLocked: boolean;
   deployed: boolean;
 }
 
@@ -71,22 +77,31 @@ async function viewAccount(accountId: string) {
   }
 }
 
-async function waitForAccount(accountId: string, tries = 10) {
+async function waitForAccount(accountId: string, tries = 15) {
   for (let i = 0; i < tries; i++) {
     const a = await viewAccount(accountId);
     if (a) return a;
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 2000));
   }
   return null;
+}
+
+/** Has NEAR's faucet create and fund the account with this public key, unless it already exists. */
+async function sponsorAccount(accountId: string, secretKey: string) {
+  if (await viewAccount(accountId)) return;
+  const { KeyPair } = await nearApi();
+  const publicKey = KeyPair.fromString(secretKey as `ed25519:${string}`).getPublicKey().toString();
+  const res = await fetch("/api/setup/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accountId, publicKey }) });
+  const out = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+  if (!out?.ok) throw new Error(out?.error || "NEAR's faucet didn't create the account. Press the button again.");
+  if (!(await waitForAccount(accountId))) throw new Error("NEAR's faucet accepted the request, but the account hasn't shown up yet. Wait a minute and press the button again.");
 }
 
 export default function Setup() {
   const [configured, setConfigured] = useState<string | null | undefined>(undefined);
   const [wallet, setWallet] = useState<WalletHandle | null>(null);
   const [account, setAccount] = useState<string | null>(null);
-  const [balance, setBalance] = useState<number | null>(null);
-  const [ledgerPrefix, setLedgerPrefix] = useState("ledger");
-  const [relayerPrefix, setRelayerPrefix] = useState("relayer");
+  const [ownerInput, setOwnerInput] = useState("");
   const [saved, setSaved] = useState<Saved | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -94,7 +109,9 @@ export default function Setup() {
   const unsub = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    setSaved(load());
+    const s = load();
+    setSaved(s);
+    if (s) setOwnerInput(s.owner);
     fetch("/api/config")
       .then((r) => r.json())
       .then(async (c: { wallet: { contractId: string } | null }) => {
@@ -107,7 +124,7 @@ export default function Setup() {
           const sub = w.selector.store.observable.subscribe(() => setAccount(signedInAccount(w)));
           unsub.current = () => sub.unsubscribe();
         } catch {
-          setError("Couldn't load NEAR wallet sign-in. Reload the page and try again.");
+          /* sign-in is optional here: the owner can type their account name */
         }
       })
       .catch(() => setError("Couldn't reach the Uprali server."));
@@ -115,120 +132,123 @@ export default function Setup() {
   }, []);
 
   useEffect(() => {
-    setBalance(null);
-    if (account) refreshBalance(account);
-  }, [account]);
+    if (account && !saved) setOwnerInput(account);
+  }, [account, saved]);
 
-  async function refreshBalance(acct: string) {
-    const a = await viewAccount(acct);
-    setBalance(a ? yoctoToNear(a.amount) : 0);
-  }
-
-  const names = account ? setupNames(account, ledgerPrefix, relayerPrefix) : null;
+  const owner = validOwner(ownerInput);
 
   async function create() {
-    if (!wallet || !names || "error" in names) return;
+    if (!owner) return;
     setError("");
     try {
       const { KeyPair } = await nearApi();
-      const { actionCreators } = await import("@near-js/transactions");
-      const { PublicKey } = await import("@near-js/crypto");
-      const { nearToYocto } = await import("near-api-js");
-
-      let s = saved && saved.owner === names.owner && saved.ledgerId === names.ledgerId ? saved : null;
+      let s = saved && saved.owner === owner ? saved : null;
       if (!s) {
-        const [l, r] = await Promise.all([viewAccount(names.ledgerId), viewAccount(names.relayerId)]);
-        if (l || r) {
-          throw new Error(`${l ? names.ledgerId : names.relayerId} already exists. Change the name above and try again.`);
-        }
+        const names = sponsoredNames(randomCode(8));
         s = {
+          owner,
           ...names,
-          deployKey: KeyPair.fromRandom("ed25519").toString(),
+          ledgerKey: KeyPair.fromRandom("ed25519").toString(),
+          relayerSetupKey: KeyPair.fromRandom("ed25519").toString(),
           relayerKey: KeyPair.fromRandom("ed25519").toString(),
           accessCode: randomCode(10),
           apiKey: `upk_${randomCode(32)}`,
-          created: false,
+          ledgerCreated: false,
+          relayerCreated: false,
+          relayerLocked: false,
           deployed: false,
         };
         save(s);
         setSaved(s);
       }
+      const step = (next: Saved) => {
+        save(next);
+        setSaved(next);
+        return next;
+      };
 
-      if (!s.created) {
-        setBusy("Approve the request in your wallet…");
-        const deployPub = PublicKey.fromString(KeyPair.fromString(s.deployKey as `ed25519:${string}`).getPublicKey().toString());
-        const relayerPub = PublicKey.fromString(KeyPair.fromString(s.relayerKey as `ed25519:${string}`).getPublicKey().toString());
-        const w = await wallet.selector.wallet();
-        await w.signAndSendTransactions({
-          transactions: [
-            {
-              receiverId: s.ledgerId,
-              actions: [
-                actionCreators.createAccount(),
-                actionCreators.transfer(nearToYocto(LEDGER_FUND_NEAR)),
-                actionCreators.addKey(deployPub, actionCreators.fullAccessKey()),
-              ],
-            },
-            {
-              receiverId: s.relayerId,
-              actions: [
-                actionCreators.createAccount(),
-                actionCreators.transfer(nearToYocto(RELAYER_FUND_NEAR)),
-                actionCreators.addKey(
-                  relayerPub,
-                  actionCreators.functionCallAccessKey(s.ledgerId, ["record"], nearToYocto(RELAYER_ALLOWANCE_NEAR)),
-                ),
-              ],
-            },
-          ],
-        });
-        setBusy("Waiting for NEAR testnet…");
-        const [l, r] = await Promise.all([waitForAccount(s.ledgerId), waitForAccount(s.relayerId)]);
-        if (!l || !r) throw new Error("The wallet sent the request, but the new accounts haven't shown up yet. Wait a minute and press the button again.");
-        s = { ...s, created: true };
-        save(s);
-        setSaved(s);
+      if (!s.ledgerCreated) {
+        if (!s.ledgerKey) throw new Error("The setup key is gone from this browser. Press Start over and try again.");
+        setBusy("Asking NEAR's faucet to create the ledger account…");
+        await sponsorAccount(s.ledgerId, s.ledgerKey);
+        s = step({ ...s, ledgerCreated: true });
       }
-
+      if (!s.relayerCreated) {
+        if (!s.relayerSetupKey) throw new Error("The setup key is gone from this browser. Press Start over and try again.");
+        setBusy("Asking NEAR's faucet to create the relayer account…");
+        await sponsorAccount(s.relayerId, s.relayerSetupKey);
+        s = step({ ...s, relayerCreated: true });
+      }
+      if (!s.relayerLocked) {
+        await lockRelayer(s);
+        s = step({ ...s, relayerSetupKey: null, relayerLocked: true });
+      }
       if (!s.deployed) {
         await deploy(s);
+        step({ ...s, ledgerKey: null, deployed: true });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Press the button again; it picks up where it stopped.");
     } finally {
       setBusy("");
-      if (account) refreshBalance(account);
     }
+  }
+
+  /** Swaps the relayer's first (full) key for one that can only call the ledger's `record`. */
+  async function lockRelayer(s: Saved) {
+    const { Account, KeyPair, actions, nearToYocto, provider } = await nearApi();
+    if (!s.relayerSetupKey) throw new Error("The setup key is gone from this browser. Press Start over and try again.");
+    setBusy("Limiting the relayer's key to recording only…");
+    const setupKey = KeyPair.fromString(s.relayerSetupKey as `ed25519:${string}`);
+    const relayerPub = KeyPair.fromString(s.relayerKey as `ed25519:${string}`).getPublicKey();
+    // Already swapped (for example, the page closed right after): nothing to do.
+    const has = await provider.viewAccessKey({ accountId: s.relayerId, publicKey: relayerPub.toString() }).then(() => true).catch(() => false);
+    if (has) return;
+    const acct = new Account(s.relayerId, provider, s.relayerSetupKey as `ed25519:${string}`);
+    await acct.signAndSendTransaction({
+      receiverId: s.relayerId,
+      actions: [
+        actions.addFunctionCallAccessKey(relayerPub, s.ledgerId, ["record"], nearToYocto(RELAYER_ALLOWANCE_NEAR)),
+        actions.deleteKey(setupKey.getPublicKey()),
+      ],
+    });
   }
 
   async function deploy(s: Saved) {
     const { Account, KeyPair, actions, teraToGas, provider } = await nearApi();
     const ledger = await viewAccount(s.ledgerId);
-    if (ledger && ledger.code_hash !== EMPTY_CODE) {
-      const owner = await provider.callFunction({ contractId: s.ledgerId, method: "owner", args: {} }).catch(() => null);
-      if (owner !== s.owner) throw new Error(`${s.ledgerId} already has a contract that isn't yours. Change the name above.`);
-    } else {
-      if (!s.deployKey) throw new Error("The setup key is gone from this browser. Change the ledger name above and start again.");
-      setBusy("Putting the ledger contract on testnet…");
-      const res = await fetch("/uprali_ledger.wasm");
-      if (!res.ok) throw new Error("Couldn't load the ledger contract file from this site.");
-      const code = new Uint8Array(await res.arrayBuffer());
-      const acct = new Account(s.ledgerId, provider, s.deployKey as `ed25519:${string}`);
-      const deployPub = KeyPair.fromString(s.deployKey as `ed25519:${string}`).getPublicKey();
-      await acct.signAndSendTransaction({
-        receiverId: s.ledgerId,
-        actions: [
-          actions.deployContract(code),
-          actions.functionCall("new", { owner: s.owner }, teraToGas("100"), 0n),
-          actions.deleteKey(deployPub), // locks the contract: no key can change it now
-        ],
-      });
-      const owner = await provider.callFunction({ contractId: s.ledgerId, method: "owner", args: {} });
-      if (owner !== s.owner) throw new Error("The contract went in, but its owner doesn't read back right. Tell your engineer.");
+    if (!ledger) throw new Error(`${s.ledgerId} isn't on testnet. Press Start over and try again.`);
+    if (ledger.code_hash !== EMPTY_CODE) {
+      const o = await provider.callFunction({ contractId: s.ledgerId, method: "owner", args: {} }).catch(() => null);
+      if (o !== s.owner) throw new Error(`${s.ledgerId} already has a contract that isn't yours. Press Start over.`);
+      return;
     }
-    const done = { ...s, deployKey: null, deployed: true };
-    save(done);
-    setSaved(done);
+    if (yoctoToNear(ledger.amount) < LEDGER_MIN_NEAR) {
+      throw new Error(`NEAR's faucet gave the ledger only ${yoctoToNear(ledger.amount)} NEAR, and the contract needs about ${LEDGER_MIN_NEAR}. Tell your engineer.`);
+    }
+    if (!s.ledgerKey) throw new Error("The setup key is gone from this browser. Press Start over and try again.");
+    setBusy("Putting the ledger contract on testnet…");
+    const res = await fetch("/uprali_ledger.wasm");
+    if (!res.ok) throw new Error("Couldn't load the ledger contract file from this site.");
+    const code = new Uint8Array(await res.arrayBuffer());
+    const acct = new Account(s.ledgerId, provider, s.ledgerKey as `ed25519:${string}`);
+    const ledgerPub = KeyPair.fromString(s.ledgerKey as `ed25519:${string}`).getPublicKey();
+    await acct.signAndSendTransaction({
+      receiverId: s.ledgerId,
+      actions: [
+        actions.deployContract(code),
+        actions.functionCall("new", { owner: s.owner }, teraToGas("100"), 0n),
+        actions.deleteKey(ledgerPub), // locks the contract: no key can change it now
+      ],
+    });
+    const o = await provider.callFunction({ contractId: s.ledgerId, method: "owner", args: {} });
+    if (o !== s.owner) throw new Error("The contract went in, but its owner doesn't read back right. Tell your engineer.");
+  }
+
+  function startOver() {
+    save(null);
+    setSaved(null);
+    setError("");
   }
 
   async function copyAll() {
@@ -258,57 +278,41 @@ export default function Setup() {
   }
 
   const ready = saved?.deployed;
-  const enough = balance !== null && balance >= NEEDED_NEAR;
 
   return (
     <main className="page setup">
       <section className="card">
         <h1>Set up the NEAR testnet ledger</h1>
-        <p className="muted">One time, about two minutes. Testnet tokens are free and have no value. Nothing here touches mainnet or real money.</p>
+        <p className="muted">One time, about two minutes. You don&apos;t need any testnet NEAR: NEAR&apos;s faucet creates and funds the two accounts. Nothing here touches mainnet or real money.</p>
 
-        <h2>1. Sign in with your wallet</h2>
+        <h2>1. Who owns the ledger</h2>
         {account ? (
-          <p>
-            Signed in as <strong>{account}</strong>.{" "}
-            {balance === null ? "Checking balance…" : <>It has <strong>{balance.toFixed(2)} testnet NEAR</strong>.</>}{" "}
-            {!ready && <button className="btn small" onClick={() => wallet && signOut(wallet)}>Use another account</button>}
-          </p>
+          <p>Signed in as <strong>{account}</strong>. {!ready && wallet && <button className="btn small" onClick={() => signOut(wallet)}>Use another account</button>}</p>
         ) : (
-          <p><button className="btn primary" disabled={!wallet} onClick={() => wallet?.modal.show()}>Sign in with NEAR wallet</button> <span className="muted">Pick Intear Wallet (or Meteor).</span></p>
+          <p>{wallet && <><button className="btn" onClick={() => wallet.modal.show()}>Sign in with NEAR wallet</button> <span className="muted">or type your testnet account:</span></>}</p>
         )}
-        {account && balance !== null && !enough && !ready && (
-          <p className="warn">
-            Setup needs about {NEEDED_NEAR} testnet NEAR. Get free testnet NEAR from the faucet in your wallet, or at{" "}
-            <a href="https://near-faucet.io" target="_blank" rel="noreferrer">near-faucet.io</a>, then{" "}
-            <button className="btn small" onClick={() => refreshBalance(account)}>check again</button>.
-          </p>
-        )}
+        <div className="fields">
+          <label>Owner account <input value={ownerInput} placeholder="yourname.testnet" onChange={(e) => setOwnerInput(e.target.value.trim().toLowerCase())} disabled={!!saved?.ledgerCreated || !!busy} /></label>
+        </div>
+        {ownerInput && !owner && <p className="warn">Use a NEAR testnet account name, one that ends in .testnet.</p>}
 
-        {account && !ready && (
+        {!ready && (
           <>
             <h2>2. Create the ledger</h2>
-            {names && "error" in names ? (
-              <p className="warn">{names.error}</p>
-            ) : names ? (
+            {saved && (
               <ul className="plain">
-                <li><strong>{names.ledgerId}</strong> holds the decision ledger. It gets {LEDGER_FUND_NEAR} NEAR and is locked after setup, so nobody can change it.</li>
-                <li><strong>{names.relayerId}</strong> records for agents and for the no-wallet fallback. Its key can only record, with up to {RELAYER_ALLOWANCE_NEAR} NEAR of fees.</li>
+                <li><strong>{saved.ledgerId}</strong> holds the decision ledger. It&apos;s locked after setup, so nobody can change it.</li>
+                <li><strong>{saved.relayerId}</strong> records for agents and for the no-wallet fallback. Its key can only record, with up to {RELAYER_ALLOWANCE_NEAR} NEAR of fees.</li>
               </ul>
-            ) : null}
-            <details>
-              <summary>Change the names</summary>
-              <div className="fields">
-                <label>Ledger <input value={ledgerPrefix} onChange={(e) => setLedgerPrefix(e.target.value.trim().toLowerCase())} disabled={!!saved?.created} /></label>
-                <label>Relayer <input value={relayerPrefix} onChange={(e) => setRelayerPrefix(e.target.value.trim().toLowerCase())} disabled={!!saved?.created} /></label>
-              </div>
-            </details>
+            )}
             <p>
-              <button className="btn primary" disabled={!!busy || !enough || !names || "error" in names} onClick={create}>
-                {saved?.created ? "Finish setup" : "Create the ledger"}
+              <button className="btn primary" disabled={!!busy || !owner} onClick={create}>
+                {saved?.ledgerCreated ? "Finish setup" : "Create the ledger"}
               </button>{" "}
               {busy && <span className="muted">{busy}</span>}
             </p>
-            <p className="muted">Your wallet asks you to approve one request that creates both accounts.</p>
+            <p className="muted">No wallet request to approve. If it stops partway, press the button again and it picks up where it stopped.</p>
+            {saved && !busy && <p><button className="btn small" onClick={startOver}>Start over with new accounts</button></p>}
           </>
         )}
 
