@@ -315,6 +315,7 @@ export function flipPoints(v: Values, inputs: Input[], limit = 3): FlipPoint[] {
       break;
     }
     if (flip === null || !Number.isFinite(flip)) continue;
+    if (unitRound(flip, inp.unit) === unitRound(cur, inp.unit)) continue; // too close to tell apart once rounded
     const ratio = Math.abs(flip / (cur || 1));
     if (ratio > 5 || ratio < 0.2) continue; // outside a plausible range
     out.push({

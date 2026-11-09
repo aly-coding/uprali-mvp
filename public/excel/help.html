@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Uprali for Excel: how to load it</title>
+  <link rel="stylesheet" href="taskpane.css" />
+  <style>
+    main { max-width: 760px; margin: 0 auto; }
+    ol { margin: 6px 0 0 20px; padding: 0; }
+    li { margin-bottom: 6px; }
+    code { background: #f1eee8; padding: 1px 4px; border-radius: 4px; font-size: 13px; }
+    a.button { display: inline-block; padding: 9px 14px; border-radius: 6px; background: var(--navy); color: #fff; text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <span class="logo" aria-hidden="true">U</span>
+    <div><div class="brand">Uprali for Excel</div><div class="muted small">How to load the add-in and use it</div></div>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Step 1: get the add-in file</h2>
+      <p>Download the add-in file. It's a small text file that tells Excel where Uprali lives.</p>
+      <p><a class="button" href="/excel/manifest.xml">Download uprali-excel-manifest.xml</a></p>
+      <p class="muted small">Excel only uses this file to find Uprali. Nothing in your workbook leaves Excel until you press Build or Explain in the Uprali panel.</p>
+    </section>
+
+    <section class="card">
+      <h2>Excel on the web (easiest, try this first)</h2>
+      <ol>
+        <li>Go to excel.cloud.microsoft (or office.com, then Excel) and open any workbook, or a new blank one.</li>
+        <li>On the <b>Home</b> tab, click <b>Add-ins</b>, then <b>More Add-ins</b>. On some accounts it's <b>Insert</b>, then <b>Add-ins</b>, then <b>More Add-ins</b>.</li>
+        <li>In the window that opens, click <b>My Add-ins</b>, then <b>Upload My Add-in</b> (top right).</li>
+        <li>Click <b>Browse</b>, pick <code>uprali-excel-manifest.xml</code> from your Downloads, and click <b>Upload</b>.</li>
+        <li>An <b>Uprali models</b> button appears on the <b>Home</b> tab. Click it to open the panel.</li>
+      </ol>
+      <p class="muted small">If there's no Upload My Add-in, your work or school account blocks custom add-ins. Use a personal Microsoft account, or ask your Microsoft 365 admin.</p>
+    </section>
+
+    <section class="card">
+      <h2>Excel on a Mac</h2>
+      <ol>
+        <li>Quit Excel.</li>
+        <li>In Finder, click <b>Go</b>, then <b>Go to Folder…</b>, paste <code>~/Library/Containers/com.microsoft.Excel/Data/Documents/</code> and press Return.</li>
+        <li>If there's no folder named <code>wef</code> there, make one (right click, <b>New Folder</b>, name it <code>wef</code>).</li>
+        <li>Drag <code>uprali-excel-manifest.xml</code> into the <code>wef</code> folder.</li>
+        <li>Open Excel and any workbook. On the <b>Home</b> tab click <b>Add-ins</b> (or <b>Insert</b>, then <b>My Add-ins</b>), and pick <b>Uprali</b> under Developer Add-ins.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Excel on Windows</h2>
+      <ol>
+        <li>Make a folder, for example <code>C:\UpraliAddin</code>, and put <code>uprali-excel-manifest.xml</code> in it.</li>
+        <li>Right click the folder, choose <b>Properties</b>, then the <b>Sharing</b> tab, then <b>Share…</b>, then <b>Share</b>. Copy the network path it shows, like <code>\\YOUR-PC\UpraliAddin</code>.</li>
+        <li>In Excel: <b>File</b>, <b>Options</b>, <b>Trust Center</b>, <b>Trust Center Settings…</b>, <b>Trusted Add-in Catalogs</b>.</li>
+        <li>Paste the network path into <b>Catalog Url</b>, click <b>Add catalog</b>, tick <b>Show in Menu</b>, then <b>OK</b>. Close and reopen Excel.</li>
+        <li><b>Home</b>, then <b>Add-ins</b>, then <b>More Add-ins</b> (or <b>Insert</b>, then <b>My Add-ins</b>). Open the <b>Shared Folder</b> tab, pick <b>Uprali</b>, click <b>Add</b>.</li>
+      </ol>
+      <p class="muted small">Needs Excel for Microsoft 365 or Excel 2021 and later.</p>
+    </section>
+
+    <section class="card">
+      <h2>Using it</h2>
+      <ol>
+        <li>In the panel, keep <b>Build vs buy</b>, type the yearly subscription for the tool you'd buy and the engineer-weeks for a prototype. Fill in anything else you know.</li>
+        <li>Click <b>Build the sheet</b>. A new sheet appears with the model.</li>
+        <li>Yellow cells are inputs. Change any of them and every total and the recommendation update.</li>
+        <li>Click <b>Explain this sheet</b> for Uprali's notes. AI notes are marked <span class="tag">Suggestion, verify</span>: check them before you rely on them.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

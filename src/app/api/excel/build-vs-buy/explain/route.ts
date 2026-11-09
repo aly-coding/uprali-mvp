@@ -1,0 +1,47 @@
+import { z } from "zod";
+import { SUGGESTION_LABEL } from "@/lib/engine/advisorShared";
+import { decide } from "@/lib/engine/decide";
+import { allow, clientKey } from "@/lib/ratelimit";
+import { cleanInputs, inputsSchema, zodMessage } from "@/lib/schema";
+import { errorResponse } from "@/lib/service";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+const body = z.object({ inputs: inputsSchema.optional() });
+
+/**
+ * Runs Uprali's analyst on the numbers in the sheet. The totals come from the same rules as
+ * the sheet, so the panel can check the two agree. The AI's words are marked as a suggestion.
+ * Nothing is saved to history or recorded on NEAR from here.
+ */
+export async function POST(req: Request) {
+  if (!allow(`excel-explain:${clientKey(req)}`, 10, 60_000)) return Response.json({ error: "Too many requests in a minute. Wait a moment." }, { status: 429 });
+  const parsed = body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: zodMessage(parsed.error) }, { status: 400 });
+  try {
+    const m = await decide({ inputs: cleanInputs(parsed.data.inputs) });
+    const usedAi = m.modelsUsed.some((x) => x.provider !== "demo");
+    return Response.json({
+      label: SUGGESTION_LABEL,
+      generatedAt: m.generatedAt,
+      status: m.status,
+      totals: m.buy && m.build ? { buy: m.buy.total, build: m.build.total, difference: m.difference, breakEven: m.breakEvenAnnualSubscription } : null,
+      recommendation: m.recommendation,
+      rules: {
+        prototypeTrap: m.prototypeTrap,
+        whatWouldChangeMyMind: m.whatWouldChangeMyMind.map((f) => f.text),
+        gaps: m.gaps.map((g) => `${g.label}: ${g.why}`),
+      },
+      ai: {
+        usedAi,
+        biggestRisk: m.biggestRisk,
+        cfoQuestions: m.cfoQuestions,
+        summary: m.spoken30s,
+        note: m.privateAi.note,
+      },
+    });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}

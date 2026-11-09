@@ -314,6 +314,21 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 | `POSTGRES_URL` or `DATABASE_URL` | Postgres for decision history (set by Vercel's Neon or Supabase integration). Without it, history is kept in memory |
 | `SESSION_SECRET` | Optional: signs the history sign-in cookie. Without it, a key is derived from the database address |
 
+## Uprali for Excel
+
+A side panel in Excel (web, Windows and Mac) that builds a live build vs buy model in a new sheet.
+
+- Pick **Build vs buy**, fill in what you know, press **Build the sheet**. Blank boxes get Uprali's benchmarks, marked as such.
+- The sheet has yellow input cells with names (`buy_annual_cost`, `prototype_weeks` and so on, scoped to the sheet), a year-by-year cost table for each side with real formulas, totals, the break-even subscription and the recommendation. Change any input and everything recalculates.
+- The formulas copy `src/lib/engine/buildVsBuy.ts` line by line, rounded the same way, so the sheet and the web app agree. `tests/excel.test.ts` loads the sheet into a formula engine and checks it against the engine for the sample CRM case and 40 random cases.
+- **Explain this sheet** reads the inputs back, runs the analyst, checks the sheet's totals against Uprali's, and writes notes under the model. AI text is marked **Suggestion, verify**. Nothing is saved to history or recorded on NEAR from Excel yet.
+- No new keys or settings: it uses the same deployment and the same AI keys as the web app.
+- Checked here with a stand-in for Excel backed by a formula engine (build, rename on a second build, edit an input, explain). Not yet run in real Excel, and Microsoft's online manifest check couldn't be reached from the build machine.
+
+How to load it: open `/excel/help.html` on the live app. The add-in file is `/excel/manifest.xml`; every address in it points at the site that serves it.
+
+Files: `public/excel/` (panel, help page, icons), `src/lib/excel/` (sheet layout and manifest), `src/app/api/excel/` (layout and explain), `src/app/excel/manifest.xml/`.
+
 ## What's tested, and what isn't yet
 
 Tested here: the cost model, where each number comes from, the extraction and prose guards, fallback from NEAR AI to the built-in analyst, API keys, the HTTP API end to end (decide, record, verify, tamper detection), the MCP server (`tools/list` and `build_vs_buy`), the attestation checks against a synthetic report (`npm test`, 107 tests, including all four business-case templates, their scenarios, payback and NPV, the AI cash and capacity split, including the advisor's suggestions and their labels, including decision history against a real Postgres (set `TEST_DATABASE_URL` to run those) and in memory, NEP-413 sign-in with real ed25519 signatures and the chain lookup faked, owners only seeing their own runs, re-runs as versions, `list_decisions` per API key, the return-on-investment rules against the playbook's worked example, recording through the relayer with the access code and no wallet, the health page, and the Slack app's signature checks, command, mentions, direct messages, template picking, buttons and install with Slack faked), the contract (`npm run contract:test`, 8 tests), a production build, and a curl run of the API and MCP server in demo mode.
@@ -335,6 +350,8 @@ src/app/mcp/         MCP server
 src/app/api/         HTTP API, and Slack under api/slack
 src/lib/slack/       Uprali for Slack: signatures, messages, install
 slack/manifest.json  Slack app manifest
+src/lib/excel/       Uprali for Excel: sheet layout with formulas, add-in manifest
+public/excel/        the Excel side panel and its help page
 src/components/      demo screen, wallet sign-in (Intear, Meteor), memo, verify page, /setup page
 src/lib/setup.ts     helpers for the no-terminal ledger setup
 public/              the built contract, served for /setup

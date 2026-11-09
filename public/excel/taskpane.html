@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Uprali</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <header class="bar">
+    <span class="logo" aria-hidden="true">U</span>
+    <div>
+      <div class="brand">Uprali</div>
+      <div class="muted small">Your AI financial analyst, in Excel</div>
+    </div>
+  </header>
+
+  <main>
+    <div id="not-excel" class="notice warn" hidden>
+      This panel runs inside Excel. Load the Uprali add-in in Excel, then open it from the Home tab.
+    </div>
+
+    <section class="card">
+      <label for="model" class="label">Model</label>
+      <select id="model">
+        <option value="build_vs_buy" selected>Build vs buy</option>
+        <option value="" disabled>New product (coming next)</option>
+        <option value="" disabled>ROI on an AI investment (coming next)</option>
+        <option value="" disabled>Unit economics (coming next)</option>
+      </select>
+      <p class="muted small">Fill in what you know. Leave a box empty and Uprali uses its benchmark, marked as such in the sheet. You can change every yellow cell later.</p>
+    </section>
+
+    <form id="form" autocomplete="off">
+      <div id="fields"><p class="muted small">Loading the questions…</p></div>
+      <section class="card">
+        <label for="horizon_years" class="label">Years to compare</label>
+        <select id="horizon_years">
+          <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+        </select>
+      </section>
+      <button type="submit" id="build" class="primary">Build the sheet</button>
+    </form>
+
+    <div id="status" class="notice" hidden></div>
+
+    <section class="card">
+      <h2>Explain a sheet</h2>
+      <p class="muted small">Open a build vs buy sheet Uprali made, then press Explain. Uprali checks the sheet's totals against its own rules and writes notes under the model.</p>
+      <button type="button" id="explain">Explain this sheet</button>
+    </section>
+
+    <div id="result" hidden></div>
+  </main>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>
