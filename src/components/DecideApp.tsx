@@ -388,7 +388,7 @@ export function DecideApp() {
         <section className="card signin hero">
           <span className="ai-mark big" aria-hidden>U</span>
           <p className="eyebrow">The verifiable approval layer for agent spending</p>
-          <h1>Before an agent buys or builds anything, Uprali checks the numbers.</h1>
+          <h1>Before an agent buys or builds anything, Uprali checks the <span className="scribble">numbers</span>.</h1>
           <p>
             Every spend decision gets a memo where each number shows its source and owner, a human sign-off, and a proof on NEAR. The analysis runs
             privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product, expand into a new market, or invest in AI.
@@ -583,7 +583,7 @@ export function DecideApp() {
       <section className="conversation">
         {!result && busy !== "deciding" ? (
           <div className="empty">
-            <h1>What business decision are you trying to make?</h1>
+            <h1>What <span className="hl">business decision</span> are you trying to <span className="scribble">make</span>?</h1>
             <p className="muted">Write a prompt or choose a starting template. Uprali turns it into a three-year, driver-based business case with an owner for every number.</p>
             {composer}
             <TemplatePicker value={template} onPick={pick} />

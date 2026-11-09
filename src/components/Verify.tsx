@@ -101,7 +101,7 @@ export default function Verify() {
   return (
     <main className="page narrow">
       <section className="card">
-        <h1>Verify a decision</h1>
+        <h1><span className="hl">Verify</span> a decision</h1>
         <p className="muted">
           Paste a decision snapshot, load its file, or give just its fingerprint. With the snapshot, this page proves nothing in it changed after it
           was recorded.

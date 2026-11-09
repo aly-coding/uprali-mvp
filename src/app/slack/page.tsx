@@ -25,7 +25,7 @@ export default async function SlackPage({ searchParams }: { searchParams: Promis
   return (
     <main className="page setup">
       <section className="card">
-        <h1>Uprali for Slack</h1>
+        <h1>Uprali for <span className="scribble">Slack</span></h1>
         <p>
           Ask <code>@uprali-mvp</code> in a channel, message it directly, or type <code>/uprali</code>, with any business decision: build vs buy, a
           new product, a go-to-market expansion or an AI investment. Uprali answers in a thread with the 3-year result, where every number came

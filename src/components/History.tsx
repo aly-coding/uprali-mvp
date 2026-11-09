@@ -276,7 +276,7 @@ export function History() {
     <main className="page">
       {whoBar}
       <section className="card">
-        <h1>Your decisions</h1>
+        <h1>Your <span className="scribble">decisions</span></h1>
         {list && (
           <p className="muted small">
             {list.privacyNote} {list.storageNote}
