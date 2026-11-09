@@ -2,7 +2,7 @@
 
 **Live app:** LIVE-APP-LINK (add the link) · **Demo video:** DEMO-VIDEO-LINK (add the link) · **Built for:** NEAR Hackathon, Privacy & Private AI track
 
-> **Judging?** See [For judges](#for-judges). On the live app you sign in with a **NEAR testnet** wallet, run a decision, record it on NEAR, and check it in History: **Match**, with a link to the transaction. Running it locally needs no wallet and no keys (demo mode, below).
+> **Judging?** See [For judges](#for-judges). On the live app you sign in with a **NEAR wallet** (a `.near` or a `.testnet` account), run a decision, record it on NEAR, and check it in History: **Match**, with a link to the transaction. Running it locally needs no wallet and no keys (demo mode, below).
 
 **Uprali is the verifiable approval layer for agent spending.** Before an agent buys a tool or builds one, it asks Uprali. Uprali gives it a decision memo where every number has a source and an owner, waits for a person to sign off, and records a proof of the decision on NEAR. The analysis runs privately on **NEAR AI Cloud**, so company finances never leave a verified enclave.
 
@@ -53,22 +53,18 @@ Run `npm run measure` to get these yourself. It runs each template's example que
 
 ## For judges
 
-The live app uses **NEAR wallet sign-in**, so each decision you make is saved to your history and recorded on NEAR under your own account.
+The live app uses **NEAR wallet sign-in**, so each decision you make is saved to your history and recorded on NEAR under your own account. Both kinds of account work:
 
-1. Open the live app and press **Connect NEAR wallet** (step 1 on the first page). Pick Intear or Meteor.
+- **`name.near` (mainnet).** Pick **My account ends in .near**, then Intear, Meteor or MyNearWallet. You sign one free message to prove it's you (nothing goes on chain, nothing is spent). Your decisions are signed in your name, and Uprali's relayer records their fingerprints on the NEAR testnet ledger for you, since a mainnet account can't sign on testnet. History and Verify show the decision as yours, recorded by the relayer.
+- **`name.testnet` (testnet).** Pick **My account ends in .testnet**, then Intear or Meteor. You sign the record on the ledger yourself.
+
+1. Open the live app, pick your kind of account and press **Connect NEAR wallet** (step 1 on the first page).
 2. Pick **Buy vs Build**, keep the example question and press **Run the decision**. **You should see** the memo, where every number shows its source and owner.
    Ran a decision before signing in? Press **Connect NEAR wallet to save** under the result: you come straight back to it, then press **Sign and record**. The live site never saves to a throwaway ledger.
-3. Press **Sign and record as** your account and approve in the wallet. **You should see** "Recorded on NEAR testnet" and **See the transaction on the NEAR explorer**.
+3. Press **Sign and record as** your account and approve in the wallet (with a `.near` account, the wallet asks you to sign the free sign-in message). **You should see** "Recorded on NEAR testnet" and **See the transaction on the NEAR explorer**.
 4. Press **See it in History**, open the decision and press **Verify**. **You should see** **Match**. Press **Try to cheat: make building $50,000 cheaper** and it turns into **No match**.
 
-**Only have a mainnet account (name.near)?** Uprali records on NEAR testnet, where mainnet accounts don't exist. Making a free testnet account takes about a minute:
-
-1. Open [wallet.near.org](https://wallet.near.org) and pick **Intear Wallet** (Meteor works too).
-2. Switch the wallet to **testnet** and create a name that ends in **.testnet**.
-3. Save the recovery phrase it shows you.
-4. Come back to Uprali and press **Connect NEAR wallet**.
-
-The app spots a `.near` account at sign-in and shows the same steps. If something doesn't work, `/api/health` lists what's set up on the server (setting names only, never values).
+**Want a testnet account instead?** Making a free one takes about a minute: open [wallet.near.org](https://wallet.near.org), pick **Intear Wallet** (Meteor works too), switch it to **testnet**, create a name that ends in **.testnet** and save the recovery phrase. If something doesn't work, `/api/health` lists what's set up on the server (setting names only, never values).
 
 ## Try it in two minutes (no keys needed)
 
@@ -81,7 +77,7 @@ Needs Node 22.18 or later.
 5. Open the link. **You should see** **Match**. Download the snapshot, change one number in it, paste it in and press **Check**. **You should see** **No match**.
 6. Open **History**. **You should see** that decision, with **Recorded**. Open it and press **Re-run with new numbers**: the next run is saved as version 2.
 7. Press **+ New case**, pick **AI investment ROI** and press **Build the case**. **You should see** **Pilot first**, the owner cards with their formulas, and the model in the panel on the right.
-8. Run `npm test`. **You should see** `Tests  107 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
+8. Run `npm test`. **You should see** `Tests  108 passed`. Run `npm run attest -- --offline`. **You should see** `VERIFIED` with five ✓ checks, then `✓ replay rejected`.
 
 ### The same tool from an agent (MCP)
 
@@ -179,7 +175,7 @@ People ask **@uprali-mvp** in a channel, message it directly, or type `/uprali`,
 
 Every decision is saved with its memo, the numbers it was given, its snapshot, fingerprint and whether it was recorded. Open **History** in the app to see them.
 
-- **Whose history.** A NEAR account counts once it confirms it's you: a free signed message (NEP-413) from a full-access key, checked on NEAR, with nothing sent on chain. Until then runs belong to this browser and move to the account when it confirms. Slack runs belong to the Slack user (`/uprali history` shows your last 10, only to you). API and MCP runs belong to the API key.
+- **Whose history.** A NEAR account counts once it confirms it's you: a free signed message (NEP-413) from a full-access key, checked on NEAR (on mainnet for a `.near` account, on testnet for a `.testnet` one), with nothing sent on chain. Until then runs belong to this browser and move to the account when it confirms. Slack runs belong to the Slack user (`/uprali history` shows your last 10, only to you). API and MCP runs belong to the API key.
 - **Re-run.** Open a decision and press **Re-run with new numbers**. The new run keeps the decision id and takes the next version, linked to the one before. The older version stays as it was.
 - **Where it's kept.** In Postgres when `POSTGRES_URL` or `DATABASE_URL` is set (Vercel's Neon or Supabase integration sets one). The table `uprali_decisions` is made on first use. With no database it's kept in the server's memory, which resets on restart, and the page says so.
 - **What's kept.** Decision memos only, never chat transcripts. You can delete any decision from your history; its fingerprint stays on the ledger.

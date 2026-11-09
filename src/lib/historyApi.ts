@@ -5,6 +5,7 @@
 import { getHistory, type HistoryEntry, type HistoryStore, type HistorySummary } from "./history";
 import { accountOwner, cookieHeader, makeNonce, makeSession, nearVerifier, SESSION_COOKIE, SESSION_DAYS, SIGN_IN_MESSAGE, SignInError, signInRecipient, verifySignIn, webOwner, withCookie, type VerifyNep413 } from "./identity";
 import { getLedger } from "./ledger";
+import { rpcUrlFor, signInNetwork } from "./nearNetwork";
 import { allow, clientKey } from "./ratelimit";
 import { publicBaseUrl } from "./service";
 
@@ -52,7 +53,11 @@ export async function signIn(req: Request, env: Env = process.env, verifier?: Ve
   try {
     const ledger = await getLedger(env);
     if (ledger.network !== "near-testnet") return Response.json({ error: "NEAR sign-in for history turns on once the ledger is on testnet." }, { status: 400 });
-    const verify = verifier ?? (await nearVerifier(env.NEAR_RPC_URL || "https://test.rpc.fastnear.com"));
+    // A name.near account is checked against mainnet, a name.testnet one against testnet.
+    const b = (body ?? {}) as { accountId?: unknown; network?: unknown };
+    const network = signInNetwork(typeof b.accountId === "string" ? b.accountId : "", b.network);
+    if (typeof network === "object") throw new SignInError(network.error);
+    const verify = verifier ?? (await nearVerifier(rpcUrlFor(network, env)));
     account = await verifySignIn(body, signInRecipient(publicBaseUrl(req, env)), verify, env);
   } catch (err) {
     if (err instanceof SignInError) return Response.json({ error: err.message }, { status: 401 });

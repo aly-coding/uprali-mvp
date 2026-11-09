@@ -7,7 +7,8 @@ import type { RecordedInfo } from "@/lib/history";
 import { MemoView, PrivateAiBadge } from "./MemoView";
 import { CaseMemoView } from "./CaseView";
 import type { CaseMemo } from "@/lib/engine/caseDecide";
-import { confirmHistorySignIn, endHistorySession, initWallet, signedInAccount, signOut, type WalletHandle } from "./wallet";
+import { confirmHistorySignIn, endHistorySession, initWallet, signedInAccount, signOut, walletConfigFor, type WalletHandle } from "./wallet";
+import { NetworkPicker } from "./TestnetHelp";
 
 interface Summary {
   id: string;
@@ -88,7 +89,7 @@ export function History() {
       .then(async (c: { wallet: { networkId: "testnet"; contractId: string } | null }) => {
         if (!c.wallet) return;
         setWalletCfg(c.wallet);
-        const w = await initWallet(c.wallet);
+        const w = await initWallet(walletConfigFor(c.wallet));
         setWallet(w);
         setWalletAccount(signedInAccount(w));
         const sub = w.selector.store.observable.subscribe(() => setWalletAccount(signedInAccount(w)));
@@ -195,7 +196,10 @@ export function History() {
         <>
           History for <strong>this browser</strong>
           {walletCfg && (
-            <button className="btn small" onClick={() => wallet?.modal.show()} disabled={!wallet}>Sign in with NEAR wallet</button>
+            <>
+              <NetworkPicker wallet={wallet} />
+              <button className="btn small" onClick={() => wallet?.modal.show()} disabled={!wallet}>Sign in with NEAR wallet</button>
+            </>
           )}
         </>
       )}
