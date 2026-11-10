@@ -25,16 +25,17 @@
       <label for="model" class="label">Model</label>
       <select id="model">
         <option value="build_vs_buy" selected>Build vs buy</option>
-        <option value="" disabled>New product (coming next)</option>
-        <option value="" disabled>ROI on an AI investment (coming next)</option>
-        <option value="" disabled>Unit economics (coming next)</option>
+        <option value="new_product">New product launch</option>
+        <option value="ai_investment">ROI on an AI investment</option>
+        <option value="unit_economics">Unit economics</option>
       </select>
+      <p id="model-blurb" class="muted small"></p>
       <p class="muted small">Fill in what you know. Leave a box empty and Uprali uses its benchmark, marked as such in the sheet. You can change every yellow cell later.</p>
     </section>
 
     <form id="form" autocomplete="off">
       <div id="fields"><p class="muted small">Loading the questions…</p></div>
-      <section class="card">
+      <section class="card" id="years-card">
         <label for="horizon_years" class="label">Years to compare</label>
         <select id="horizon_years">
           <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
@@ -48,7 +49,7 @@
 
     <section class="card">
       <h2>Explain a sheet</h2>
-      <p class="muted small">Open a build vs buy sheet Uprali made, then press Explain. Uprali checks the sheet's totals against its own rules and writes notes under the model.</p>
+      <p class="muted small">Open any sheet the Uprali panel made, then press Explain. Uprali checks the sheet's totals against its own rules and writes notes under the model.</p>
       <button type="button" id="explain">Explain this sheet</button>
     </section>
 

@@ -42,8 +42,10 @@ export interface SheetInput {
 }
 
 export interface SheetSpec {
-  schema: typeof SHEET_SCHEMA;
-  template: typeof TEMPLATE;
+  schema: string;
+  /** Which Uprali model the sheet holds: build_vs_buy, new_product, ai_investment or unit_economics. */
+  model: string;
+  template: { id: string; title: string; version: string };
   sheetName: string;
   horizonYears: number;
   cells: SheetCell[];
@@ -53,8 +55,13 @@ export interface SheetSpec {
   /** Where the AI notes go when someone asks for them. */
   notesStartRow: number;
   /** The cells the side panel reads back to compare with the engine. */
-  check: { buyTotal: string; buildTotal: string; difference: string; recommendation: string };
+  check?: { buyTotal: string; buildTotal: string; difference: string; recommendation: string };
+  /** Named totals the panel compares with Uprali's own numbers when it explains a sheet. */
+  checks: Array<{ name: string; label: string }>;
 }
+
+/** Every sheet names a cell that says which model it holds, so the panel knows how to read it back. */
+export const MODEL_MARKER = "uprali_model";
 
 /** Fields that go into the sheet: the cost comparison. The optional return-on-investment fields come later. */
 export const SHEET_FIELDS: FieldDef[] = FIELDS.filter((f) => !f.optional && f.key !== "horizon_years");
@@ -71,7 +78,7 @@ export function colLetter(i: number): string {
   return s;
 }
 
-const FORMATS: Partial<Record<Unit, string>> = {
+export const FORMATS: Partial<Record<Unit, string>> = {
   usd: "$#,##0",
   usd_per_year: "$#,##0",
   usd_per_week: "$#,##0",
@@ -85,7 +92,7 @@ const FORMATS: Partial<Record<Unit, string>> = {
   months: "0.0",
 };
 
-const UNIT_WORDS: Partial<Record<Unit, string>> = {
+export const UNIT_WORDS: Partial<Record<Unit, string>> = {
   usd: "$ once",
   usd_per_year: "$ a year",
   usd_per_week: "$ a week",
@@ -100,7 +107,7 @@ const UNIT_WORDS: Partial<Record<Unit, string>> = {
   text: "text",
 };
 
-const MONEY = "$#,##0";
+export const MONEY = "$#,##0";
 
 /** Converts an engine value (7 for 7%) to the cell value (0.07). */
 export function toCell(unit: Unit, v: number | string | null): number | string {
@@ -123,7 +130,7 @@ function round6(n: number): number {
   return Math.round(n * 1e6) / 1e6;
 }
 
-function whoGaveIt(i: Input): string {
+export function whoGaveIt(i: Input): string {
   if (i.value === null) return "Missing: only you can give this";
   if (i.owner === "agent") return `${i.source}${i.needsHuman ? ". Please confirm" : ""}`;
   return i.source === "Provided by the person asking" ? "You, in the Uprali panel" : i.source;
@@ -156,6 +163,8 @@ export function buildVsBuySheet(given: Record<string, GivenValue | undefined>, o
 
   let r = 1;
   put(`A${r}`, { value: "Uprali: build or buy", style: "title" });
+  put(`${lastCol}${r}`, { value: "uprali:build_vs_buy", style: "helper" });
+  name(MODEL_MARKER, `${lastCol}${r}`, "Which Uprali model this sheet holds.");
   r++;
   put(`A${r}`, { value: "Change any yellow cell and the whole model updates. The rules are Uprali's build vs buy rules; the formulas are in the cells.", style: "subtitle" });
   r += 2;
@@ -304,6 +313,7 @@ export function buildVsBuySheet(given: Record<string, GivenValue | undefined>, o
 
   return {
     schema: SHEET_SCHEMA,
+    model: "build_vs_buy",
     template: TEMPLATE,
     sheetName: (opts.sheetName ?? "Build vs Buy").slice(0, 31),
     horizonYears: n,
@@ -323,5 +333,9 @@ export function buildVsBuySheet(given: Record<string, GivenValue | undefined>, o
       difference: "difference",
       recommendation: `B${rowOf["Recommendation"]}`,
     },
+    checks: [
+      { name: "buy_total", label: "Cost to buy" },
+      { name: "build_total", label: "Cost to build" },
+    ],
   };
 }

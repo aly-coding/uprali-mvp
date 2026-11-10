@@ -73,7 +73,7 @@ describe("Excel build vs buy sheet", () => {
     expect(named("buy_total")).toBe(memo.buy!.total);
     expect(named("build_total")).toBe(memo.build!.total);
     expect(named("difference")).toBe(memo.difference);
-    expect(at(spec.check.recommendation)).toBe(memo.recommendation.headline);
+    expect(at(spec.check!.recommendation)).toBe(memo.recommendation.headline);
     const why = spec.cells.find((c) => c.formula?.startsWith('="Over '))!;
     expect(at(why.address)).toBe(`Over 3 years, building costs $${memo.build!.total.toLocaleString("en-US")} against $${memo.buy!.total.toLocaleString("en-US")} to buy, $${memo.difference!.toLocaleString("en-US")} more.`);
     // Break-even subscription row

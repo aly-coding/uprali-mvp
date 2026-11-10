@@ -3,13 +3,22 @@
  * rules live on the server, in the same engine as the web app. */
 "use strict";
 
-const API = "/api/excel/build-vs-buy";
 const SUGGESTION = "Suggestion, verify";
+const MODELS = {
+  build_vs_buy: { title: "Build vs buy", blurb: "The full cost of building a tool in-house against buying one, year by year." },
+  new_product: { title: "New product launch", blurb: "Three-year P&L, investment, NPV, payback and unit economics for a new product." },
+  ai_investment: { title: "ROI on an AI investment", blurb: "What an AI tool costs against the time it saves, with cash kept apart from freed-up time." },
+  unit_economics: { title: "Unit economics", blurb: "Gross margin, months to earn back CAC, lifetime value and LTV to CAC for one customer." },
+};
+const api = (model) => (model === "build_vs_buy" ? "/api/excel/build-vs-buy" : "/api/excel/model/" + model);
+
+let current = "build_vs_buy";
 let FIELDS = [];
+const fieldCache = {};
 let inExcel = false;
 
 const $ = (id) => document.getElementById(id);
-const usd = (n) => "$" + Math.round(n).toLocaleString("en-US");
+const usd = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
 
 function setStatus(text, kind) {
   const el = $("status");
@@ -27,18 +36,28 @@ function busy(on) {
 
 const UNIT = {
   usd: "$", usd_per_year: "$ a year", usd_per_week: "$ a week", usd_per_hour: "$ an hour",
-  pct: "%", weeks: "eng-weeks", hours_per_week: "hrs a week", hours_per_month: "hrs a month",
+  pct: "%", weeks: "eng-weeks", hours_per_week: "hrs a week", hours_per_month: "hrs a month", hours_per_year: "hrs a year",
   count: "", years: "years", months: "months", text: "",
 };
 
-async function loadFields() {
-  const res = await fetch(API);
+async function getFields(model) {
+  if (fieldCache[model]) return fieldCache[model];
+  const res = await fetch(api(model));
   if (!res.ok) throw new Error("Couldn't load the questions from Uprali.");
-  const data = await res.json();
-  FIELDS = data.fields;
-  const required = new Set(data.required);
+  fieldCache[model] = await res.json();
+  return fieldCache[model];
+}
+
+async function loadFields(model) {
+  current = model;
+  $("model-blurb").textContent = (MODELS[model] && MODELS[model].blurb) || "";
+  $("years-card").hidden = model !== "build_vs_buy";
   const box = $("fields");
   box.innerHTML = "";
+  const data = await getFields(model);
+  if (current !== model) return; // the person switched again while this loaded
+  FIELDS = data.fields;
+  const required = new Set(data.required);
   for (const g of data.groups) {
     const card = document.createElement("section");
     card.className = "card";
@@ -63,7 +82,7 @@ async function loadFields() {
       input.id = "f_" + f.key;
       input.name = f.key;
       input.type = f.unit === "text" ? "text" : "number";
-      if (input.type === "number") { input.step = "any"; input.min = "0"; }
+      if (input.type === "number") input.step = "any";
       if (required.has(f.key)) input.required = true;
       input.placeholder =
         f.benchmark === null ? (f.unit === "text" ? "" : "Only you know this")
@@ -91,11 +110,12 @@ async function loadFields() {
 function formInputs() {
   const inputs = {};
   for (const f of FIELDS) {
-    const raw = $("f_" + f.key).value.trim();
+    const el = $("f_" + f.key);
+    const raw = el ? el.value.trim() : "";
     if (raw === "") continue;
     inputs[f.key] = f.unit === "text" ? raw : Number(raw);
   }
-  inputs.horizon_years = Number($("horizon_years").value);
+  if (current === "build_vs_buy") inputs.horizon_years = Number($("horizon_years").value);
   return inputs;
 }
 
@@ -118,12 +138,12 @@ const STYLES = {
 
 async function uniqueSheetName(ctx, base) {
   for (let i = 1; i < 100; i++) {
-    const name = i === 1 ? base : `${base} ${i}`;
+    const name = i === 1 ? base : `${base.slice(0, 27)} ${i}`;
     const ws = ctx.workbook.worksheets.getItemOrNullObject(name);
     await ctx.sync();
     if (ws.isNullObject) return name;
   }
-  return `${base} ${Date.now() % 10000}`;
+  return `${base.slice(0, 25)} ${Date.now() % 10000}`;
 }
 
 async function writeSheet(spec) {
@@ -144,7 +164,6 @@ async function writeSheet(spec) {
       if (c.style && STYLES[c.style]) STYLES[c.style](r);
     }
     for (const w of spec.columnWidths) ws.getRange(`${w.column}:${w.column}`).format.columnWidth = w.width;
-    ws.getRange("A2").format.wrapText = false;
     ws.activate();
     ws.getRange("A1").select();
     await ctx.sync();
@@ -158,7 +177,7 @@ async function onBuild(ev) {
   busy(true);
   setStatus("Building the sheet…");
   try {
-    const res = await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs: formInputs() }) });
+    const res = await fetch(api(current), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs: formInputs() }) });
     const spec = await res.json();
     if (!res.ok) throw new Error(spec.error || "Uprali couldn't lay out the sheet.");
     const name = await writeSheet(spec);
@@ -180,32 +199,41 @@ function fromCell(unit, v) {
   return unit === "pct" ? Math.round(n * 100 * 1e6) / 1e6 : n;
 }
 
-async function readSheet() {
+/** Reads named cells from the active sheet. Missing names come back as null. */
+async function readNames(keys) {
   return Excel.run(async (ctx) => {
     const ws = ctx.workbook.worksheets.getActiveWorksheet();
-    const keys = FIELDS.map((f) => f.key).concat(["horizon_years", "buy_total", "build_total", "difference", "uprali_notes"]);
     const items = keys.map((k) => ws.names.getItemOrNullObject(k));
-    await ctx.sync();
-    const marker = items[keys.indexOf("build_total")];
-    if (marker.isNullObject) return null;
-    const ranges = items.map((it) => (it.isNullObject ? null : it.getRange().load("values,address")));
     ws.load("name");
     await ctx.sync();
-    const val = (k) => { const r = ranges[keys.indexOf(k)]; return r ? r.values[0][0] : null; };
-    const inputs = {};
-    for (const f of FIELDS) {
-      const v = fromCell(f.unit, val(f.key));
-      if (v !== null && v !== "") inputs[f.key] = v;
-    }
-    inputs.horizon_years = fromCell("years", val("horizon_years")) || 3;
-    const notes = ranges[keys.indexOf("uprali_notes")];
-    return {
-      sheet: ws.name,
-      inputs,
-      totals: { buy: val("buy_total"), build: val("build_total"), difference: val("difference") },
-      notesAddress: notes ? notes.address.split("!").pop() : null,
-    };
+    const ranges = items.map((it) => (it.isNullObject ? null : it.getRange().load("values,address")));
+    await ctx.sync();
+    const out = { sheet: ws.name, values: {}, addresses: {} };
+    keys.forEach((k, i) => {
+      out.values[k] = ranges[i] ? ranges[i].values[0][0] : null;
+      out.addresses[k] = ranges[i] ? ranges[i].address.split("!").pop() : null;
+    });
+    return out;
   });
+}
+
+async function readSheet() {
+  const first = await readNames(["uprali_model", "build_total"]);
+  let model = null;
+  const marker = first.values.uprali_model;
+  if (typeof marker === "string" && marker.indexOf("uprali:") === 0) model = marker.slice(7);
+  else if (first.values.build_total !== null) model = "build_vs_buy"; // sheets made before the marker existed
+  if (!model || !MODELS[model]) return null;
+  const data = await getFields(model);
+  const keys = data.fields.map((f) => f.key).concat(["horizon_years", "uprali_notes"]);
+  const got = await readNames(keys);
+  const inputs = {};
+  for (const f of data.fields) {
+    const v = fromCell(f.unit, got.values[f.key]);
+    if (v !== null && v !== "") inputs[f.key] = v;
+  }
+  if (model === "build_vs_buy") inputs.horizon_years = fromCell("years", got.values.horizon_years) || 3;
+  return { model, sheet: got.sheet, inputs, notesAddress: got.addresses.uprali_notes };
 }
 
 async function writeNotes(notesAddress, ex) {
@@ -214,21 +242,26 @@ async function writeNotes(notesAddress, ex) {
   const when = new Date(ex.generatedAt).toLocaleString();
   const lines = [
     ["Uprali's notes", "section"],
-    [`${SUGGESTION}. Written ${when} for the numbers in this sheet at that time. They don't change when you edit inputs; press Explain again.`, "note"],
-    [ex.ai.usedAi ? "AI analysis (" + SUGGESTION + ")" : "Analysis (" + SUGGESTION + ")", "header"],
-    ["Biggest risk: " + ex.ai.biggestRisk, "label"],
+    [`Written ${when} for the numbers in this sheet at that time. They don't change when you edit inputs; press Explain again.`, "note"],
+    [ex.recommendation.headline, "total"],
+    [ex.recommendation.why, "label"],
   ];
-  ex.ai.cfoQuestions.forEach((q, i) => lines.push([`Question a CFO will ask ${i + 1}: ${q}`, "label"]));
-  if (ex.rules.whatWouldChangeMyMind.length) {
-    lines.push(["What would change the answer (Uprali's rules, worked out from the numbers)", "header"]);
-    ex.rules.whatWouldChangeMyMind.forEach((t) => lines.push([t, "label"]));
+  if (ex.ai) {
+    lines.push([(ex.ai.usedAi ? "AI analysis" : "Analysis") + " (" + SUGGESTION + ")", "header"]);
+    lines.push(["Biggest risk: " + ex.ai.biggestRisk, "label"]);
+    ex.ai.cfoQuestions.forEach((q, i) => lines.push([`Question a CFO will ask ${i + 1}: ${q}`, "label"]));
   }
-  if (ex.ai.note) lines.push([ex.ai.note, "note"]);
+  if (ex.rules.lines && ex.rules.lines.length) {
+    lines.push([ex.rules.linesTitle, "header"]);
+    ex.rules.lines.forEach((t) => lines.push([t, "label"]));
+  }
+  if (ex.ai && ex.ai.note) lines.push([ex.ai.note, "note"]);
   await Excel.run(async (ctx) => {
     const ws = ctx.workbook.worksheets.getActiveWorksheet();
-    ws.getRange(`A${row}:A${row + 30}`).clear("Contents");
-    ws.getRange(`A${row}:A${row + 30}`).format.font.bold = false;
-    ws.getRange(`A${row}:A${row + 30}`).format.fill.clear();
+    const area = ws.getRange(`A${row}:A${row + 40}`);
+    area.clear("Contents");
+    area.format.font.bold = false;
+    area.format.fill.clear();
     lines.forEach(([text, style], i) => {
       const r = ws.getRange(`A${row + i}`);
       r.values = [[String(text).replace(/^[=+\-@]+/, "")]];
@@ -241,7 +274,14 @@ async function writeNotes(notesAddress, ex) {
   });
 }
 
-function renderExplain(ex, sheetTotals) {
+const lowerFirst = (s) => s.charAt(0).toLowerCase() + s.slice(1);
+
+function fmtCheck(name, v) {
+  if (typeof v !== "number") return String(v);
+  return name === "months_to_recover_cac" ? `${Math.round(v * 10) / 10} months` : usd(v);
+}
+
+function renderExplain(ex, sheetValues) {
   const box = $("result");
   box.hidden = false;
   box.innerHTML = "";
@@ -252,20 +292,22 @@ function renderExplain(ex, sheetTotals) {
   add("h2", "Uprali's rules");
   add("div", ex.recommendation.headline, "rec");
   add("p", ex.recommendation.why, "small");
-  if (ex.totals) {
-    const same = sheetTotals.buy === ex.totals.buy && sheetTotals.build === ex.totals.build;
+  if (ex.checks && ex.checks.length) {
+    const close = (a, b) => typeof a === "number" && Math.abs(a - b) < 0.01;
+    const same = ex.checks.every((c) => close(sheetValues[c.name], c.value));
     add("div", same
-      ? `The sheet matches Uprali's numbers: ${usd(ex.totals.build)} to build, ${usd(ex.totals.buy)} to buy.`
-      : `The sheet's totals (${usd(sheetTotals.build || 0)} to build, ${usd(sheetTotals.buy || 0)} to buy) differ from Uprali's (${usd(ex.totals.build)} and ${usd(ex.totals.buy)}). A formula or the years cell may have been edited.`,
+      ? "The sheet matches Uprali's numbers: " + ex.checks.map((c) => `${lowerFirst(c.label)} ${fmtCheck(c.name, c.value)}`).join(", ") + "."
+      : "The sheet differs from Uprali's numbers: " + ex.checks.map((c) => `${lowerFirst(c.label)} ${fmtCheck(c.name, sheetValues[c.name])} in the sheet, ${fmtCheck(c.name, c.value)} by Uprali`).join("; ") + ". A formula may have been edited.",
       "notice " + (same ? "good" : "warn"));
   }
-  if (ex.rules.gaps.length) {
+  if (ex.rules.gaps && ex.rules.gaps.length) {
     add("p", "Still to confirm:", "small");
     const ul = document.createElement("ul");
     ex.rules.gaps.forEach((g) => { const li = document.createElement("li"); li.className = "small"; li.textContent = g; ul.appendChild(li); });
     card.appendChild(ul);
   }
   box.appendChild(card);
+  if (!ex.ai) return;
 
   const ai = document.createElement("section");
   ai.className = "card";
@@ -292,11 +334,12 @@ async function onExplain() {
   setStatus("Reading the sheet and asking Uprali…");
   try {
     const sheet = await readSheet();
-    if (!sheet) throw new Error("This sheet isn't an Uprali build vs buy sheet. Open one Uprali made, or build one first.");
-    const res = await fetch(API + "/explain", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs: sheet.inputs }) });
+    if (!sheet) throw new Error("This sheet isn't one the Uprali panel made. Open one it made, or build one first.");
+    const res = await fetch(api(sheet.model) + "/explain", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs: sheet.inputs }) });
     const ex = await res.json();
     if (!res.ok) throw new Error(ex.error || "Uprali couldn't explain this sheet.");
-    renderExplain(ex, sheet.totals);
+    const checked = await readNames((ex.checks || []).map((c) => c.name));
+    renderExplain(ex, checked.values);
     await writeNotes(sheet.notesAddress, ex);
     setStatus(`Notes written under the model on "${sheet.sheet}".`, "good");
   } catch (e) {
@@ -316,8 +359,12 @@ function friendly(e) {
 
 $("form").addEventListener("submit", onBuild);
 $("explain").addEventListener("click", onExplain);
+$("model").addEventListener("change", (e) => {
+  setStatus("");
+  loadFields(e.target.value).catch((err) => setStatus(friendly(err), "bad"));
+});
 
-loadFields().catch((e) => setStatus(friendly(e), "bad"));
+loadFields("build_vs_buy").catch((e) => setStatus(friendly(e), "bad"));
 
 if (window.Office && Office.onReady) {
   Office.onReady((info) => {

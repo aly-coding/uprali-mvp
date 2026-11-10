@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { SUGGESTION_LABEL } from "@/lib/engine/advisorShared";
-import { decide } from "@/lib/engine/decide";
+import { explain } from "@/lib/excel/api";
 import { allow, clientKey } from "@/lib/ratelimit";
 import { cleanInputs, inputsSchema, zodMessage } from "@/lib/schema";
 import { errorResponse } from "@/lib/service";
@@ -20,27 +19,7 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: zodMessage(parsed.error) }, { status: 400 });
   try {
-    const m = await decide({ inputs: cleanInputs(parsed.data.inputs) });
-    const usedAi = m.modelsUsed.some((x) => x.provider !== "demo");
-    return Response.json({
-      label: SUGGESTION_LABEL,
-      generatedAt: m.generatedAt,
-      status: m.status,
-      totals: m.buy && m.build ? { buy: m.buy.total, build: m.build.total, difference: m.difference, breakEven: m.breakEvenAnnualSubscription } : null,
-      recommendation: m.recommendation,
-      rules: {
-        prototypeTrap: m.prototypeTrap,
-        whatWouldChangeMyMind: m.whatWouldChangeMyMind.map((f) => f.text),
-        gaps: m.gaps.map((g) => `${g.label}: ${g.why}`),
-      },
-      ai: {
-        usedAi,
-        biggestRisk: m.biggestRisk,
-        cfoQuestions: m.cfoQuestions,
-        summary: m.spoken30s,
-        note: m.privateAi.note,
-      },
-    });
+    return Response.json(await explain("build_vs_buy", cleanInputs(parsed.data.inputs)));
   } catch (err) {
     return errorResponse(err);
   }

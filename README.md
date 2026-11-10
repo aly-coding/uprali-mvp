@@ -312,7 +312,11 @@ See `.env.example`. Everything is optional; with nothing set Uprali runs in demo
 
 ## Uprali for Excel
 
-A side panel in Excel (web, Windows and Mac) that builds a live build vs buy model in a new sheet.
+A side panel in Excel (web, Windows and Mac) that builds a live model in a new sheet: **build vs buy**, **new product launch**, **ROI on an AI investment** or **unit economics**.
+
+- New product and AI ROI follow `src/lib/engine/cases.ts`: year-by-year model, money in, out and net rounded to whole dollars, then NPV (Excel's `NPV`), ROI, payback and the recommendation, all as formulas. AI ROI keeps cash apart from freed-up time, as the web app does. Unit economics is one customer in steady state, using the new product model's rules (gross margin, months to earn back CAC, lifetime value, LTV to CAC).
+- `tests/excel-cases.test.ts` checks each against the engine: the sample cases, 25 random cases each, an input edited in the sheet, and no formula errors.
+- Routes: `/api/excel/models`, `/api/excel/model/<id>` (GET the questions, POST the layout) and `/api/excel/model/<id>/explain`. Build vs buy's older `/api/excel/build-vs-buy` routes still answer as before.
 
 - Pick **Build vs buy**, fill in what you know, press **Build the sheet**. Blank boxes get Uprali's benchmarks, marked as such.
 - The sheet has yellow input cells with names (`buy_annual_cost`, `prototype_weeks` and so on, scoped to the sheet), a year-by-year cost table for each side with real formulas, totals, the break-even subscription and the recommendation. Change any input and everything recalculates.
@@ -346,7 +350,7 @@ src/app/mcp/         MCP server
 src/app/api/         HTTP API, and Slack under api/slack
 src/lib/slack/       Uprali for Slack: signatures, messages, install
 slack/manifest.json  Slack app manifest
-src/lib/excel/       Uprali for Excel: sheet layout with formulas, add-in manifest
+src/lib/excel/       Uprali for Excel: sheet layouts with formulas for each model, add-in manifest
 public/excel/        the Excel side panel and its help page
 src/components/      demo screen, wallet sign-in (Intear, Meteor), memo, verify page, /setup page
 src/lib/setup.ts     helpers for the no-terminal ledger setup
