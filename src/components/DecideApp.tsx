@@ -6,12 +6,13 @@ import { SUGGESTION_SOURCE, type ToolSuggestion } from "@/lib/engine/advisorShar
 import { canonicalJson, sha256Hex, type DecisionSnapshot } from "@/lib/engine/snapshot";
 import type { Memo } from "@/lib/engine/types";
 import type { CaseMemo } from "@/lib/engine/caseDecide";
-import { CASE_TEMPLATES, isCaseTemplate, type TemplateId } from "@/lib/engine/cases";
+import { CASE_TEMPLATES, isCaseTemplate, templateList, type TemplateId } from "@/lib/engine/cases";
 import { CASE_TABS, CaseForm, CaseMemoView, CaseTable, TemplatePicker, templateTitle, type CaseTab } from "./CaseView";
 import { MemoView, PrivateAiBadge } from "./MemoView";
 import { Advisor } from "./Advisor";
 import { MicButton, ReadAloud, VOICE_ON, appendSpoken } from "./Voice";
-import { NetworkPicker, NetworkNote } from "./TestnetHelp";
+import { NetworkPicker } from "./TestnetHelp";
+import { WalletLogin } from "./WalletLogin";
 import { chosenNetwork, confirmHistorySignIn, endHistorySession, explorerAccount, explorerTx, initWallet, recordWithWallet, signedInAccount, signOut, walletConfigFor, type WalletHandle } from "./wallet";
 
 interface Config {
@@ -97,6 +98,8 @@ interface Recorded {
 const EXAMPLE =
   "Should we build our own CRM or keep paying for HubSpot? We pay $720 a year for HubSpot Starter. Our engineer built a working prototype in 3 weeks. It would need 2 integrations, email and billing.";
 
+const TEMPLATE_LIST = templateList();
+
 const groupInfo = (g: FieldGroup) => FIELD_GROUPS.find((x) => x.id === g) ?? { id: g, title: "", blurb: "" };
 
 const MAIN_FIELDS = ["tool_name", "buy_annual_cost", "prototype_weeks", "engineer_weekly_cost"];
@@ -112,6 +115,7 @@ export function saveSnapshotLocally(fingerprint: string, snapshot: DecisionSnaps
 export function DecideApp() {
   const [config, setConfig] = useState<Config | null>(null);
   const [wallet, setWallet] = useState<WalletHandle | null>(null);
+  const [walletFailed, setWalletFailed] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
   const [template, setTemplate] = useState<TemplateId>("build_vs_buy");
@@ -173,7 +177,7 @@ export function DecideApp() {
           const sub = w.selector.store.observable.subscribe(() => setAccount(signedInAccount(w)));
           unsub.current = () => sub.unsubscribe();
         } catch {
-          setError("Couldn't load NEAR wallet sign-in. You can still continue in demo mode.");
+          setWalletFailed(true);
         }
       })
       .catch(() => setError("Couldn't reach the Uprali server."));
@@ -210,19 +214,14 @@ export function DecideApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, runAfterSignIn]);
 
-  function startWithWallet(t: TemplateId) {
-    if (!wallet) return;
-    saveAfterSignIn({ template: t, run: false });
-    wallet.modal.show();
-  }
-
   function connectToSave() {
     if (!result || !wallet) return;
     savePending({ template, question, asked, result });
     wallet.modal.show();
   }
 
-  const who = account ?? (demo ? "demo-user" : null);
+  // On the live site nobody gets past the log-in without a wallet, even from a shared decision link.
+  const who = account ?? (demo && config?.localDemo ? "demo-user" : null);
   // On the live site everyone connects a wallet first; the throwaway demo is only for running it on your own computer.
   const needsWallet = Boolean(config && !config.localDemo && !account);
   const groups = useMemo(() => {
@@ -399,7 +398,7 @@ export function DecideApp() {
           <h1>Before an agent buys or builds anything, Uprali checks the <span className="scribble">numbers</span>.</h1>
           <p>
             Every spend decision gets a memo where each number shows its source and owner, a human sign-off, and a proof on NEAR. The analysis runs
-            privately on NEAR AI Cloud. Pick a decision to try it: build or buy, launch a product, expand into a new market, or invest in AI.
+            privately on NEAR AI Cloud. Log in with your NEAR wallet to start.
           </p>
           {config.localDemo ? (
             <>
@@ -409,27 +408,20 @@ export function DecideApp() {
             </>
           ) : (
             <>
-              <ol className="start-steps">
-                <li>
-                  <strong>Connect your NEAR wallet.</strong> A .near or a .testnet account both work. It&apos;s how you sign each decision and keep your history.
-                  <NetworkPicker wallet={wallet} />
-                  <div>
-                    <button className="btn primary big" onClick={() => wallet?.modal.show()} disabled={!wallet}>
-                      {wallet ? "Connect NEAR wallet" : "Loading NEAR wallet…"}
-                    </button>
-                  </div>
-                  {!config.wallet && (
-                    <p className="muted small">You can connect and run decisions now. Saving them on NEAR switches on once the site owner finishes the one-time setup.</p>
-                  )}
-                  <NetworkNote network={wallet?.networkId ?? chosenNetwork()} />
-                </li>
-                <li>
-                  <strong>Pick a decision.</strong> If you pick one first, Uprali asks for the wallet and then opens it.
-                  <TemplatePicker value={null} onPick={startWithWallet} />
-                </li>
-              </ol>
+              <WalletLogin wallet={wallet} failed={walletFailed} />
+              {!config.wallet && (
+                <p className="muted small">Saving decisions on NEAR switches on once the site owner finishes the one-time setup. You can log in and run decisions now.</p>
+              )}
+              <div>
+                <p className="muted small">Once you&apos;re in, you can decide:</p>
+                <ul className="decide-list small">
+                  {TEMPLATE_LIST.map((t) => (
+                    <li key={t.id}><strong>{t.title}:</strong> {t.description}</li>
+                  ))}
+                </ul>
+              </div>
               <div className="judges small">
-                <strong>Judging?</strong> Connect a NEAR wallet (a .near or .testnet account, with Intear, Meteor or MyNearWallet), pick any decision and run it, press <strong>Sign and record</strong>, then open
+                <strong>Judging?</strong> Log in with a NEAR wallet above (a .near or .testnet account, with Intear, Meteor or MyNearWallet), pick any decision and run it, press <strong>Sign and record</strong>, then open
                 History and press <strong>Verify</strong>: it should say Match, with a link to the transaction on the NEAR explorer.
               </div>
             </>

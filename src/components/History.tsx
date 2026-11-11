@@ -9,6 +9,7 @@ import { CaseMemoView } from "./CaseView";
 import type { CaseMemo } from "@/lib/engine/caseDecide";
 import { confirmHistorySignIn, endHistorySession, initWallet, signedInAccount, signOut, walletConfigFor, type WalletHandle } from "./wallet";
 import { NetworkPicker } from "./TestnetHelp";
+import { WalletLogin } from "./WalletLogin";
 
 interface Summary {
   id: string;
@@ -62,6 +63,8 @@ export function History() {
   const [walletCfg, setWalletCfg] = useState<{ networkId: "testnet"; contractId: string } | null>(null);
   const [wallet, setWallet] = useState<WalletHandle | null>(null);
   const [walletAccount, setWalletAccount] = useState<string | null>(null);
+  const [localDemo, setLocalDemo] = useState<boolean | null>(null);
+  const [walletFailed, setWalletFailed] = useState(false);
   const [busy, setBusy] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -86,10 +89,12 @@ export function History() {
     let unsub: (() => void) | null = null;
     fetch("/api/config")
       .then((r) => r.json())
-      .then(async (c: { wallet: { networkId: "testnet"; contractId: string } | null }) => {
-        if (!c.wallet) return;
+      .then(async (c: { wallet: { networkId: "testnet"; contractId: string } | null; localDemo?: boolean }) => {
+        setLocalDemo(!!c.localDemo);
         setWalletCfg(c.wallet);
-        const w = await initWallet(walletConfigFor(c.wallet));
+        // Wallet log-in works without the ledger, so the live site can ask for it before showing history.
+        const w = await initWallet(walletConfigFor(c.wallet)).catch(() => null);
+        if (!w) return setWalletFailed(true);
         setWallet(w);
         setWalletAccount(signedInAccount(w));
         const sub = w.selector.store.observable.subscribe(() => setWalletAccount(signedInAccount(w)));
@@ -179,6 +184,20 @@ export function History() {
 
   const account = list?.account ?? null;
   const unconfirmed = walletAccount && walletAccount !== account;
+
+  // On the live site history opens only after a NEAR wallet log-in.
+  if (localDemo === null) return <main className="page"><p className="muted">Loading…</p></main>;
+  if (!localDemo && !walletAccount && !account) {
+    return (
+      <main className="page narrow">
+        <section className="card signin">
+          <h1>Your decision history</h1>
+          <p className="muted">Log in with the NEAR wallet you made your decisions with to see them.</p>
+          <WalletLogin wallet={wallet} failed={walletFailed} />
+        </section>
+      </main>
+    );
+  }
 
   const whoBar = (
     <div className="who">

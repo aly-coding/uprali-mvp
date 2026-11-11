@@ -490,3 +490,15 @@ fieldset.owner-card legend > span:first-child { color: var(--accent); }
   .topbar nav a.nav-cta:hover { background: var(--yellow-strong); }
   .templates > .template:nth-child(4n+4) .template-icon { background: #3a1c2a; color: #ff8fbf; }
 }
+
+/* NEAR wallet log-in in front of the app */
+.wallet-login { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.wallet-login-title { margin: 0; font-size: 18px; }
+.wallet-options { display: flex; flex-direction: column; gap: 8px; }
+.wallet-option { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.wallet-option:hover:not(:disabled) { border-color: var(--text); }
+.wallet-option:disabled { opacity: .6; cursor: default; }
+.wallet-option img { border-radius: 6px; flex: none; }
+.wallet-option .muted { margin-left: auto; font-weight: 400; }
+.wallet-options .link { align-self: flex-start; }
+.decide-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }

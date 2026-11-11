@@ -83,6 +83,42 @@ export async function initWallet(cfg: WalletConfig): Promise<WalletHandle> {
   return { selector, modal, networkId: cfg.networkId, contractId: contractId ?? null };
 }
 
+export interface WalletOption {
+  id: string;
+  name: string;
+  iconUrl: string;
+  /** False when it's a browser extension that isn't installed here. */
+  available: boolean;
+}
+
+/** The wallets on offer for this network, in the order they were set up. */
+export function walletOptions(w: WalletHandle): WalletOption[] {
+  return w.selector.store
+    .getState()
+    .modules.filter((m) => !m.metadata.deprecated)
+    .map((m) => ({ id: m.id, name: m.metadata.name, iconUrl: m.metadata.iconUrl, available: m.metadata.available }));
+}
+
+/**
+ * Signs in with one wallet straight from the page, the same way the wallet selector's pop-up does.
+ * A wallet that isn't installed here opens the pop-up, which shows how to get it.
+ */
+export async function connectWith(w: WalletHandle, id: string): Promise<void> {
+  const module = w.selector.store.getState().modules.find((m) => m.id === id);
+  if (!module || !module.metadata.available) {
+    w.modal.show();
+    return;
+  }
+  const wallet = await w.selector.wallet(id);
+  const params = w.contractId ? { contractId: w.contractId, methodNames: ["record"] } : {};
+  if (wallet.type === "browser") {
+    const meta = wallet.metadata as { successUrl?: string; failureUrl?: string };
+    await wallet.signIn({ ...params, successUrl: meta.successUrl, failureUrl: meta.failureUrl } as never);
+    return;
+  }
+  await wallet.signIn({ ...params } as never);
+}
+
 export function signedInAccount(w: WalletHandle): string | null {
   const accounts = w.selector.store.getState().accounts;
   return accounts.find((a) => a.active)?.accountId ?? accounts[0]?.accountId ?? null;
