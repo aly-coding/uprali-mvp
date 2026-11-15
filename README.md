@@ -21,6 +21,8 @@ The first decision it covers in depth is the one teams get wrong all the time: *
 
 **Next step:** settle approved spend with **NEAR Intents**, so the payment an agent makes is tied to the decision that approved it.
 
+**Where this is going:** the [Uprali thesis](docs/thesis.md) explains why the moat is a decision brain learned from tracked business cases, not the dashboard.
+
 Built for the NEAR Hackathon, **Privacy & Private AI** track.
 
 ## Templates
